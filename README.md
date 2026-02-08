@@ -128,6 +128,7 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 | `/plan` | Toggle plan mode (Claude reviews changes before applying) |
 | `/heartbeat action:<prompt\|stop\|status\|test> [interval:<minutes>]` | Configure autonomous heartbeat (see below) |
 | `/restart` | Restart the bot process (requires a process manager to auto-restart) |
+| `/summary` | Ask Claude to summarize the current session and project state |
 
 ### Heartbeat (Autonomous Mode)
 
