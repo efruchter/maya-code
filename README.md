@@ -86,9 +86,14 @@ npm install
 
 ### Running
 
-Development:
+Development (auto-restarts on file changes):
 ```bash
 npm run dev
+```
+
+Development with `/restart` support (restarts on exit):
+```bash
+npm run dev:loop
 ```
 
 Production:

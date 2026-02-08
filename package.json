@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx --watch src/index.ts",
+    "dev:loop": "while true; do tsx src/index.ts; echo 'Restarting...'; sleep 1; done",
     "deploy-commands": "tsx scripts/deploy-commands.ts"
   },
   "dependencies": {
