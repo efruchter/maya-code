@@ -1,12 +1,16 @@
 import {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
+  TextChannel,
   ThreadChannel,
+  AttachmentBuilder,
 } from 'discord.js';
 import { runClaude, isProcessRunning } from '../../claude/manager.js';
 import { getSession } from '../../storage/sessions.js';
 import { DiscordResponder } from '../../discord/responder.js';
 import { logger } from '../../utils/logger.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 export const data = new SlashCommandBuilder()
   .setName('continue')
@@ -23,6 +27,19 @@ function getChannelName(channel: unknown): string {
     return channel.name;
   }
   return 'default';
+}
+
+async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
+  const attachments: AttachmentBuilder[] = [];
+  for (const filePath of filePaths) {
+    try {
+      await fs.access(filePath);
+      attachments.push(new AttachmentBuilder(filePath, { name: path.basename(filePath) }));
+    } catch {
+      // File not found, skip
+    }
+  }
+  return attachments;
 }
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -80,7 +97,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (result.isError) {
       await responder.sendError(result.text);
     } else {
-      await responder.finalize(result.text);
+      const attachments = await createAttachments(result.imageFiles);
+      await responder.finalize(result.text, attachments);
+
+      const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
+      if (nonImageFiles.length > 0) {
+        const ch = interaction.channel as TextChannel | ThreadChannel | null;
+        if (ch) {
+          const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
+          await ch.send(`**Files created:** ${fileList}`);
+        }
+      }
     }
 
     logger.info('Claude continue completed', {
@@ -88,6 +115,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       threadId,
       durationMs: result.durationMs,
       costUsd: result.costUsd,
+      filesCreated: result.createdFiles.length,
+      imagesAttached: result.imageFiles.length,
     });
   } catch (error) {
     logger.error('Error continuing Claude', error);

@@ -3,6 +3,7 @@ import {
   Message,
   TextChannel,
   ThreadChannel,
+  AttachmentBuilder,
 } from 'discord.js';
 import Limiter from 'limiter';
 const { RateLimiter } = Limiter;
@@ -178,9 +179,9 @@ export class DiscordResponder {
   }
 
   /**
-   * Finalize the response
+   * Finalize the response, optionally with file attachments
    */
-  async finalize(text: string): Promise<void> {
+  async finalize(text: string, attachments?: AttachmentBuilder[]): Promise<void> {
     // Cancel any pending updates
     if (this.pendingUpdate) {
       clearTimeout(this.pendingUpdate);
@@ -189,6 +190,18 @@ export class DiscordResponder {
 
     this.currentText = text;
     await this.doUpdate();
+
+    // Send attachments as a follow-up if present
+    if (attachments && attachments.length > 0) {
+      try {
+        const channel = this.interaction.channel as TextChannel | ThreadChannel;
+        if (channel) {
+          await channel.send({ files: attachments });
+        }
+      } catch (error) {
+        logger.error('Failed to send attachments', error);
+      }
+    }
   }
 
   /**

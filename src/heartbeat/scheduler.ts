@@ -1,8 +1,10 @@
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
 import { runClaude, isProcessRunning } from '../claude/manager.js';
 import { getSession } from '../storage/sessions.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 interface HeartbeatTimer {
   timer: ReturnType<typeof setTimeout>;
@@ -95,13 +97,28 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         logger.info('Heartbeat completed — no work to do', { channelId });
       } else if (result.text) {
         const chunks = splitMessage(result.text);
-        for (const chunk of chunks) {
-          await channel.send(chunk);
+        const attachments = await createAttachments(result.imageFiles);
+
+        for (let i = 0; i < chunks.length; i++) {
+          const isLast = i === chunks.length - 1;
+          await channel.send({
+            content: chunks[i],
+            files: isLast && attachments.length > 0 ? attachments : undefined,
+          });
         }
+
+        const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
+        if (nonImageFiles.length > 0) {
+          const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
+          await channel.send(`**Files created:** ${fileList}`);
+        }
+
         logger.info('Heartbeat completed', {
           channelId,
           durationMs: result.durationMs,
           costUsd: result.costUsd,
+          filesCreated: result.createdFiles.length,
+          imagesAttached: result.imageFiles.length,
         });
       }
     } catch (error) {
@@ -151,6 +168,22 @@ function splitMessage(text: string): string[] {
   }
 
   return chunks;
+}
+
+/**
+ * Create Discord attachments for image files that exist
+ */
+async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
+  const attachments: AttachmentBuilder[] = [];
+  for (const filePath of filePaths) {
+    try {
+      await fs.access(filePath);
+      attachments.push(new AttachmentBuilder(filePath, { name: path.basename(filePath) }));
+    } catch {
+      logger.debug(`File not found for attachment: ${filePath}`);
+    }
+  }
+  return attachments;
 }
 
 /**
