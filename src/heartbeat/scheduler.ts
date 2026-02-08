@@ -54,13 +54,15 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
       return;
     }
 
-    // Read heartbeat.md from project directory
-    const prompt = session.heartbeat.prompt;
-    if (!prompt) {
+    const userPrompt = session.heartbeat.prompt;
+    if (!userPrompt) {
       logger.debug('Heartbeat skipped — no prompt configured', { channelId });
       scheduleTick(channelId, channelName, intervalMs, client);
       return;
     }
+
+    // Wrap with [NO WORK] instruction so Claude can signal nothing to do
+    const prompt = `${userPrompt}\n\nIMPORTANT: If there is no work to do, respond with exactly "[NO WORK]" and nothing else.`;
 
     // Get the Discord channel
     const channel = await client.channels.fetch(channelId);
@@ -87,19 +89,21 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
       clearInterval(typingInterval);
 
-      if (result.text) {
-        // Split long messages
+      const noWork = result.text.trim() === '[NO WORK]';
+
+      if (noWork) {
+        logger.info('Heartbeat completed — no work to do', { channelId });
+      } else if (result.text) {
         const chunks = splitMessage(result.text);
         for (const chunk of chunks) {
           await channel.send(chunk);
         }
+        logger.info('Heartbeat completed', {
+          channelId,
+          durationMs: result.durationMs,
+          costUsd: result.costUsd,
+        });
       }
-
-      logger.info('Heartbeat completed', {
-        channelId,
-        durationMs: result.durationMs,
-        costUsd: result.costUsd,
-      });
     } catch (error) {
       clearInterval(typingInterval);
       logger.error('Heartbeat Claude run failed', { channelId, error });
