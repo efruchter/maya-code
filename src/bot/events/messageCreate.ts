@@ -1,5 +1,5 @@
 import { Client, Events, Message, ThreadChannel, AttachmentBuilder } from 'discord.js';
-import { runClaude, isProcessRunning } from '../../claude/manager.js';
+import { runClaude } from '../../claude/manager.js';
 import { resetHeartbeat } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config.js';
@@ -120,12 +120,6 @@ export function setupMessageEvent(client: Client): void {
 
     // Reset heartbeat timer — human activity pushes back the next tick
     resetHeartbeat(channelId, client);
-
-    // Check for existing process
-    if (isProcessRunning(channelId, threadId)) {
-      await message.reply('A Claude process is already running. Please wait for it to complete.');
-      return;
-    }
 
     // Show typing indicator
     await channel.sendTyping();

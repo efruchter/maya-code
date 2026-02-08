@@ -15,6 +15,9 @@ export interface RunOptions {
 // Track active processes by session key
 const activeProcesses = new Map<string, ClaudeProcess>();
 
+// Queue: per-channel promise chain so messages run sequentially
+const processQueues = new Map<string, Promise<unknown>>();
+
 /**
  * Get session key for tracking
  */
@@ -23,16 +26,28 @@ function getProcessKey(channelId: string, threadId: string | null): string {
 }
 
 /**
- * Run Claude CLI for a channel/thread
+ * Run Claude CLI for a channel/thread.
+ * If a process is already running, the call is queued and will run after
+ * the current process completes.
  */
-export async function runClaude(options: RunOptions): Promise<ClaudeProcessResult> {
+export function runClaude(options: RunOptions): Promise<ClaudeProcessResult> {
+  const processKey = getProcessKey(options.channelId, options.threadId);
+
+  const pending = processQueues.get(processKey) || Promise.resolve();
+  const next = pending.then(() => runClaudeImmediate(options)).catch((err) => {
+    // Ensure queue continues even if this run fails
+    throw err;
+  });
+
+  // Always advance the queue, even on failure
+  processQueues.set(processKey, next.catch(() => {}));
+
+  return next;
+}
+
+async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessResult> {
   const { channelId, channelName, threadId, prompt, continueSession, onTextUpdate } = options;
   const processKey = getProcessKey(channelId, threadId);
-
-  // Check if there's already an active process
-  if (activeProcesses.has(processKey)) {
-    throw new Error('A Claude process is already running in this channel/thread');
-  }
 
   // Get or create session
   const session = await getOrCreateSession(channelId, threadId, channelName);
