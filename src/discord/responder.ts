@@ -4,19 +4,21 @@ import {
   TextChannel,
   ThreadChannel,
 } from 'discord.js';
-import { RateLimiter } from 'limiter';
+import Limiter from 'limiter';
+const { RateLimiter } = Limiter;
+type RateLimiterInstance = InstanceType<typeof RateLimiter>;
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
 const MAX_LENGTH = config.discord.maxMessageLength;
 
 // Rate limiters per message for edits
-const editLimiters = new Map<string, RateLimiter>();
+const editLimiters = new Map<string, RateLimiterInstance>();
 
 /**
  * Get or create a rate limiter for message edits
  */
-function getEditLimiter(messageId: string): RateLimiter {
+function getEditLimiter(messageId: string): RateLimiterInstance {
   if (!editLimiters.has(messageId)) {
     const limiter = new RateLimiter({
       tokensPerInterval: config.rateLimit.editsPerMessage,

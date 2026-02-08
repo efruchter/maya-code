@@ -46,11 +46,14 @@ export async function runClaude(options: RunOptions): Promise<ClaudeProcessResul
     workingDirectory,
   });
 
+  // Automatically continue if session has been used before
+  const shouldContinue = continueSession || session.messageCount > 0;
+
   const process = new ClaudeProcess({
     sessionId: session.sessionId,
     workingDirectory,
     prompt,
-    continueSession,
+    continueSession: shouldContinue,
   });
 
   activeProcesses.set(processKey, process);

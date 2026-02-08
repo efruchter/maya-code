@@ -37,13 +37,17 @@ export class ClaudeProcess extends EventEmitter {
   private buildArgs(): string[] {
     const args = [
       '-p',
+      '--verbose',
       '--output-format', 'stream-json',
-      '--session-id', this.options.sessionId,
       '--dangerously-skip-permissions',
     ];
 
     if (this.options.continueSession) {
-      args.push('--continue');
+      // Resume existing session by ID
+      args.push('--resume', this.options.sessionId);
+    } else {
+      // Start new session with ID
+      args.push('--session-id', this.options.sessionId);
     }
 
     args.push(this.options.prompt);
@@ -65,24 +69,29 @@ export class ClaudeProcess extends EventEmitter {
       this.process = spawn('claude', args, {
         cwd: this.options.workingDirectory,
         env: { ...process.env },
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       let buffer = '';
 
+      logger.info(`Claude CLI spawned, pid: ${this.process.pid}`);
+
       this.process.stdout?.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
+        const raw = chunk.toString();
+        logger.debug(`stdout chunk (${raw.length} bytes)`);
+        buffer += raw;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           const event = parseStreamLine(line);
           if (event) {
+            logger.debug(`Parsed event: type=${event.type}`);
             this.accumulator.processEvent(event);
             this.emit('event', event);
 
             // Emit text updates for streaming
-            if (event.type === 'content_block_delta' && event.delta.text) {
+            if (event.type === 'assistant') {
               this.emit('text', this.accumulator.getText());
             }
           }
@@ -90,7 +99,7 @@ export class ClaudeProcess extends EventEmitter {
       });
 
       this.process.stderr?.on('data', (chunk: Buffer) => {
-        logger.warn('Claude CLI stderr:', chunk.toString());
+        logger.warn(`Claude CLI stderr: ${chunk.toString()}`);
       });
 
       this.process.on('error', (err) => {
@@ -99,6 +108,7 @@ export class ClaudeProcess extends EventEmitter {
       });
 
       this.process.on('close', (code) => {
+        logger.info(`Claude CLI exited with code ${code}, accumulated text length: ${this.accumulator.getText().length}`);
         // Process any remaining buffer
         if (buffer) {
           const event = parseStreamLine(buffer);
@@ -113,9 +123,9 @@ export class ClaudeProcess extends EventEmitter {
         const imageFiles = this.accumulator.getImageFiles();
 
         if (error) {
-          logger.error('Claude CLI returned error', error);
+          logger.error('Claude CLI returned error', { error });
           resolve({
-            text: error.message,
+            text: error,
             durationMs: result?.duration_ms || 0,
             costUsd: result?.total_cost_usd || 0,
             isError: true,
