@@ -15,15 +15,48 @@ Discord Channel (#feature-api)  →  ./projects/feature-api/
 ### Prerequisites
 
 - Node.js 18+
-- Claude Code CLI installed and authenticated
-- A Discord bot with the following permissions:
-  - Send Messages
-  - Read Message History
-  - Attach Files
-  - Use Slash Commands
-- **Message Content Intent** enabled in Discord Developer Portal
+- Claude Code CLI installed and authenticated (`claude` available on your PATH)
+- A Discord server where you have admin/manage permissions
 
-### Installation
+### Step 1: Create a Discord Bot
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and log in.
+
+2. Click **"New Application"** in the top right. Give it a name (e.g. "Maya Code") and click **Create**.
+
+3. **Copy your Client ID:**
+   - On the **General Information** page (the default page), find **Application ID**.
+   - Copy it — this is your `DISCORD_CLIENT_ID`.
+
+4. **Create the bot and get its token:**
+   - Go to the **Bot** tab in the left sidebar.
+   - Click **"Reset Token"** (or **"Add Bot"** if this is a fresh application).
+   - Copy the token — this is your `DISCORD_TOKEN`. You won't be able to see it again, so save it now.
+
+5. **Enable Message Content Intent:**
+   - Still on the **Bot** tab, scroll down to **Privileged Gateway Intents**.
+   - Toggle **Message Content Intent** to ON.
+   - Click **Save Changes**.
+
+   > This is required for the bot to read message content in channels. Without it, messages will appear empty to the bot.
+
+6. **Invite the bot to your server:**
+   - Go to the **OAuth2** tab in the left sidebar.
+   - Under **OAuth2 URL Generator**, check the **`bot`** and **`applications.commands`** scopes.
+   - Under **Bot Permissions**, check:
+     - Send Messages
+     - Read Message History
+     - Attach Files
+     - Use Slash Commands
+   - Copy the generated URL at the bottom and open it in your browser.
+   - Select your server and click **Authorize**.
+
+7. **Get your Guild (Server) ID:**
+   - In Discord, go to **Settings > Advanced** and enable **Developer Mode**.
+   - Right-click your server name in the sidebar and click **"Copy Server ID"**.
+   - This is your `DISCORD_GUILD_ID`.
+
+### Step 2: Install Maya Code
 
 ```bash
 git clone git@github.com:efruchter/maya-code.git
@@ -31,18 +64,18 @@ cd maya-code
 npm install
 ```
 
-### Configuration
+### Step 3: Configure Environment
 
 1. Copy the example environment file:
    ```bash
    cp .env.example .env
    ```
 
-2. Fill in your Discord credentials in `.env`:
+2. Fill in the values you collected above:
    ```
-   DISCORD_TOKEN=<your_bot_token>
-   DISCORD_CLIENT_ID=<your_client_id>
-   DISCORD_GUILD_ID=<your_server_id>
+   DISCORD_TOKEN=<bot token from step 1.4>
+   DISCORD_CLIENT_ID=<application id from step 1.3>
+   DISCORD_GUILD_ID=<server id from step 1.7>
    BASE_DIRECTORY=./projects
    ```
 
