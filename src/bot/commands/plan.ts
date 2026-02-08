@@ -19,10 +19,12 @@ function getChannelName(channel: unknown): string {
 }
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
   const channel = interaction.channel;
 
   if (!channel) {
-    await interaction.reply({ content: 'Could not determine channel.', ephemeral: true });
+    await interaction.editReply({ content: 'Could not determine channel.' });
     return;
   }
 
@@ -32,7 +34,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const channelName = getChannelName(parentChannel);
   const channelId = parentChannel?.id || channel.id;
 
-  // Get or create session so plan mode can be toggled before first message
   const session = await getOrCreateSession(channelId, threadId, channelName);
   const newPlanMode = !session.planMode;
 
@@ -43,11 +44,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     : '';
 
   if (newPlanMode) {
-    await interaction.reply(
+    await interaction.editReply(
       `**Plan mode enabled${notice}.** Claude will review and describe changes before applying them. Use \`/plan\` again to disable.`
     );
   } else {
-    await interaction.reply(
+    await interaction.editReply(
       `**Plan mode disabled${notice}.** Claude will apply changes directly. Use \`/plan\` again to re-enable.`
     );
   }

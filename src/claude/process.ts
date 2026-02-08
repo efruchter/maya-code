@@ -8,7 +8,6 @@ export interface ClaudeProcessOptions {
   workingDirectory: string;
   prompt: string;
   continueSession?: boolean;
-  planMode?: boolean;
 }
 
 export interface ClaudeProcessResult {
@@ -42,11 +41,7 @@ export class ClaudeProcess extends EventEmitter {
       '--output-format', 'stream-json',
     ];
 
-    if (this.options.planMode) {
-      args.push('--permission-mode', 'plan');
-    } else {
-      args.push('--dangerously-skip-permissions');
-    }
+    args.push('--dangerously-skip-permissions');
 
     if (this.options.continueSession) {
       // Resume existing session by ID

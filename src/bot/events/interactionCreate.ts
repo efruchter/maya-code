@@ -23,12 +23,16 @@ export function setupInteractionEvent(client: Client): void {
     } catch (error) {
       logger.error(`Error executing command: ${interaction.commandName}`, error);
 
-      const errorMessage = 'There was an error executing this command.';
+      try {
+        const errorMessage = 'There was an error executing this command.';
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: errorMessage, ephemeral: true });
-      } else {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({ content: errorMessage, flags: 64 });
+        } else {
+          await interaction.reply({ content: errorMessage, flags: 64 });
+        }
+      } catch {
+        // Interaction expired, nothing we can do
       }
     }
   });

@@ -54,7 +54,6 @@ export async function runClaude(options: RunOptions): Promise<ClaudeProcessResul
     workingDirectory,
     prompt,
     continueSession: shouldContinue,
-    planMode: session.planMode || false,
   });
 
   activeProcesses.set(processKey, process);
