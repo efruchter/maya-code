@@ -1,6 +1,6 @@
 import { Client, Events, Message, ThreadChannel, AttachmentBuilder } from 'discord.js';
 import { runClaude } from '../../claude/manager.js';
-import { resetHeartbeat } from '../../heartbeat/scheduler.js';
+import { resetHeartbeat, setLastUsageLimit } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config.js';
 import fs from 'fs/promises';
@@ -143,6 +143,9 @@ export function setupMessageEvent(client: Client): void {
       clearInterval(typingInterval);
 
       if (result.isError) {
+        if (/hit your limit/i.test(result.text)) {
+          setLastUsageLimit(result.text);
+        }
         await message.reply(`**Error:** ${result.text}`);
       } else {
         // Split response if needed

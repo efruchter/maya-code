@@ -4,6 +4,7 @@ import {
   ThreadChannel,
 } from 'discord.js';
 import { getSession, getAllSessions } from '../../storage/sessions.js';
+import { getLastUsageLimit } from '../../heartbeat/scheduler.js';
 
 export const data = new SlashCommandBuilder()
   .setName('usage')
@@ -54,6 +55,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   lines.push(`**All sessions** (${allSessions.length} total)`);
   lines.push(`  Messages: ${totalMessages}`);
   lines.push(`  Cost: $${totalCost.toFixed(4)}`);
+
+  // Show last known usage limit
+  const limit = getLastUsageLimit();
+  if (limit) {
+    const ago = Math.round((Date.now() - limit.timestamp) / 60000);
+    lines.push('');
+    lines.push(`**Last usage limit** (${ago}m ago)`);
+    lines.push(`  ${limit.message}`);
+  }
 
   await interaction.editReply(lines.join('\n'));
 }
