@@ -3,6 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
+export interface HeartbeatConfig {
+  enabled: boolean;
+  intervalMs: number;
+  prompt: string;
+}
+
 export interface SessionData {
   sessionId: string;
   channelId: string;
@@ -11,6 +17,7 @@ export interface SessionData {
   createdAt: string;
   messageCount: number;
   planMode?: boolean;
+  heartbeat?: HeartbeatConfig;
 }
 
 interface StateData {
@@ -117,6 +124,27 @@ export async function setPlanMode(
     state.sessions[key].planMode = planMode;
     await saveState(state);
     logger.info(`Set plan mode to ${planMode} for session: ${key}`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Set heartbeat config for a session
+ */
+export async function setHeartbeat(
+  channelId: string,
+  threadId: string | null,
+  heartbeat: HeartbeatConfig | undefined
+): Promise<boolean> {
+  const key = getSessionKey(channelId, threadId);
+  const state = await loadState();
+
+  if (state.sessions[key]) {
+    state.sessions[key].heartbeat = heartbeat;
+    await saveState(state);
+    logger.info(`Set heartbeat for session: ${key}`, { heartbeat });
     return true;
   }
 

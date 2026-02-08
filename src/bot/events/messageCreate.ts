@@ -1,5 +1,6 @@
 import { Client, Events, Message, ThreadChannel, AttachmentBuilder } from 'discord.js';
 import { runClaude, isProcessRunning } from '../../claude/manager.js';
+import { resetHeartbeat } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config.js';
 import fs from 'fs/promises';
@@ -98,8 +99,9 @@ async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder
 
 export function setupMessageEvent(client: Client): void {
   client.on(Events.MessageCreate, async (message: Message) => {
-    // Ignore bot messages
+    // Ignore bot messages and system messages
     if (message.author.bot) return;
+    if (message.system) return;
 
     // Ignore empty messages
     if (!message.content.trim()) return;
@@ -115,6 +117,9 @@ export function setupMessageEvent(client: Client): void {
     const parentChannel = isThread ? channel.parent : channel;
     const channelName = getChannelName(parentChannel);
     const channelId = parentChannel?.id || channel.id;
+
+    // Reset heartbeat timer — human activity pushes back the next tick
+    resetHeartbeat(channelId, client);
 
     // Check for existing process
     if (isProcessRunning(channelId, threadId)) {
@@ -195,7 +200,11 @@ export function setupMessageEvent(client: Client): void {
     } catch (error) {
       clearInterval(typingInterval);
       logger.error('Error running Claude', error);
-      await message.reply(`**Error:** ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+      try {
+        await channel.send(`**Error:** ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
+      } catch {
+        // Failed to send error message, already logged
+      }
     }
   });
 }

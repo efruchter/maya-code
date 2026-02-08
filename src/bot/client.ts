@@ -20,6 +20,11 @@ export function createClient(): Client {
   setupInteractionEvent(client);
   setupMessageEvent(client);
 
+  // Prevent unhandled Discord errors from crashing the process
+  client.on('error', (error) => {
+    logger.error('Discord client error', error);
+  });
+
   return client;
 }
 
