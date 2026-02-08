@@ -51,6 +51,22 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const action = interaction.options.getString('action', true);
   const intervalMinutes = interaction.options.getInteger('interval');
 
+  // Handle status
+  if (action === 'status') {
+    const session = await getOrCreateSession(channelId, null, channelName);
+    const hb = session.heartbeat;
+    if (hb?.enabled) {
+      const mins = Math.round(hb.intervalMs / 60000);
+      const running = isActive(channelId);
+      await interaction.editReply(
+        `**Heartbeat:** enabled, every ${mins} minute${mins !== 1 ? 's' : ''} ${running ? '(timer active)' : '(timer not running — will restore on restart)'}\n**Prompt:** ${hb.prompt}`
+      );
+    } else {
+      await interaction.editReply('**Heartbeat:** disabled');
+    }
+    return;
+  }
+
   // Handle stop
   if (action === 'stop' || intervalMinutes === 0) {
     await getOrCreateSession(channelId, null, channelName);
