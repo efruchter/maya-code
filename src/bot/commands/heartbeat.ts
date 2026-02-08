@@ -4,7 +4,7 @@ import {
   ThreadChannel,
 } from 'discord.js';
 import { getOrCreateSession, setHeartbeat } from '../../storage/sessions.js';
-import { startHeartbeat, stop, isActive } from '../../heartbeat/scheduler.js';
+import { startHeartbeat, stop, isActive, fireNow } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 
 const DEFAULT_INTERVAL_MINUTES = 30;
@@ -64,6 +64,18 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } else {
       await interaction.editReply('**Heartbeat:** disabled');
     }
+    return;
+  }
+
+  // Handle test — fire heartbeat immediately
+  if (action === 'test') {
+    const session = await getOrCreateSession(channelId, null, channelName);
+    if (!session.heartbeat?.enabled) {
+      await interaction.editReply('**No heartbeat configured.** Set one up first with `/heartbeat action:<prompt>`.');
+      return;
+    }
+    await interaction.editReply('**Firing heartbeat now...**');
+    fireNow(channelId, channelName, interaction.client);
     return;
   }
 

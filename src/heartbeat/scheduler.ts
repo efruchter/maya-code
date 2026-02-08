@@ -196,6 +196,17 @@ export function startHeartbeat(channelId: string, channelName: string, intervalM
 }
 
 /**
+ * Fire a heartbeat tick immediately (for testing). Also resets the timer.
+ */
+export function fireNow(channelId: string, channelName: string, client: Client): void {
+  const existing = activeTimers.get(channelId);
+  const intervalMs = existing?.intervalMs || 0;
+
+  // Fire the tick now
+  tick(channelId, channelName, intervalMs, client);
+}
+
+/**
  * Reset the heartbeat timer (called when a message is sent).
  * This restarts the countdown from now.
  */
