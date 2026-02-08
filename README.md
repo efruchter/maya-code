@@ -117,7 +117,7 @@ The bot will:
 | `/clear` | Reset the session for this channel/thread |
 | `/status` | Show session info (ID, message count, project directory) |
 | `/plan` | Toggle plan mode (Claude reviews changes before applying) |
-| `/heartbeat action:<prompt\|stop\|status> [interval:<minutes>]` | Configure autonomous heartbeat (see below) |
+| `/heartbeat action:<prompt\|stop\|status\|test> [interval:<minutes>]` | Configure autonomous heartbeat (see below) |
 
 ### Heartbeat (Autonomous Mode)
 
@@ -135,12 +135,17 @@ This sets Claude to run the given prompt every 30 minutes of inactivity. The tim
 /heartbeat action:status
 ```
 
+**Test-fire immediately:**
+```
+/heartbeat action:test
+```
+
 **Disable:**
 ```
 /heartbeat action:stop
 ```
 
-If Claude has nothing to do on a heartbeat tick, it responds with `[NO WORK]` internally and stays silent — no channel spam.
+If Claude has nothing to do on a heartbeat tick, it responds with `[NO WORK]` internally and stays silent — no channel spam. Messages are queued when Claude is busy, so you can send follow-ups without waiting.
 
 Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
 
