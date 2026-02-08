@@ -116,6 +116,33 @@ The bot will:
 | `/continue [message]` | Continue the last conversation with an optional message |
 | `/clear` | Reset the session for this channel/thread |
 | `/status` | Show session info (ID, message count, project directory) |
+| `/plan` | Toggle plan mode (Claude reviews changes before applying) |
+| `/heartbeat action:<prompt\|stop\|status> [interval:<minutes>]` | Configure autonomous heartbeat (see below) |
+
+### Heartbeat (Autonomous Mode)
+
+The heartbeat feature lets Claude work autonomously on a project without human intervention. It runs a prompt you provide on a repeating timer, continuing the existing session so Claude has full context.
+
+**Enable:**
+```
+/heartbeat action:Check for TODOs and continue working on the next item interval:30
+```
+
+This sets Claude to run the given prompt every 30 minutes of inactivity. The timer resets whenever a human sends a message in the channel, so heartbeats only fire when nobody is actively talking.
+
+**Check current config:**
+```
+/heartbeat action:status
+```
+
+**Disable:**
+```
+/heartbeat action:stop
+```
+
+If Claude has nothing to do on a heartbeat tick, it responds with `[NO WORK]` internally and stays silent — no channel spam.
+
+Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
 
 ### Threads
 
@@ -133,9 +160,11 @@ maya-code/
 │   │   ├── events/               # Discord event handlers
 │   │   └── commands/             # Slash commands
 │   ├── claude/
-│   │   ├── manager.ts            # Process lifecycle
+│   │   ├── manager.ts            # Process lifecycle & queue
 │   │   ├── process.ts            # CLI wrapper
 │   │   └── parser.ts             # Stream-JSON parser
+│   ├── heartbeat/
+│   │   └── scheduler.ts          # Autonomous heartbeat timers
 │   ├── discord/
 │   │   └── responder.ts          # Message chunking
 │   └── storage/
