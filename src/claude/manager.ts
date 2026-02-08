@@ -9,8 +9,18 @@ export interface RunOptions {
   threadId: string | null;
   prompt: string;
   continueSession?: boolean;
+  isHeartbeat?: boolean;
   onTextUpdate?: (text: string) => void;
 }
+
+const DISCORD_SYSTEM_PROMPT = `You are running inside a Discord channel. Your text responses will be posted as messages.
+
+File sharing:
+- Any image files you create (png, jpg, gif, webp, svg, bmp) are AUTOMATICALLY attached to your Discord message.
+- To share any other file with the user in Discord, include [UPLOAD: path/to/file] in your response. The file will be attached and the tag will be removed from the displayed message.
+- You can include multiple [UPLOAD] tags in a single response.`;
+
+const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. If there is no meaningful work to do, respond with exactly "[NO WORK]" and nothing else. Do not greet the user or ask questions — just do the work or respond [NO WORK].`;
 
 // Track active processes by session key
 const activeProcesses = new Map<string, ClaudeProcess>();
@@ -46,7 +56,7 @@ export function runClaude(options: RunOptions): Promise<ClaudeProcessResult> {
 }
 
 async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessResult> {
-  const { channelId, channelName, threadId, prompt, continueSession, onTextUpdate } = options;
+  const { channelId, channelName, threadId, prompt, continueSession, isHeartbeat, onTextUpdate } = options;
   const processKey = getProcessKey(channelId, threadId);
 
   // Get or create session
@@ -64,11 +74,18 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
   // Automatically continue if session has been used before
   const shouldContinue = continueSession || session.messageCount > 0;
 
+  // Build system prompt
+  let systemPrompt = DISCORD_SYSTEM_PROMPT;
+  if (isHeartbeat) {
+    systemPrompt += HEARTBEAT_ADDITION;
+  }
+
   const process = new ClaudeProcess({
     sessionId: session.sessionId,
     workingDirectory,
     prompt,
     continueSession: shouldContinue,
+    appendSystemPrompt: systemPrompt,
   });
 
   activeProcesses.set(processKey, process);

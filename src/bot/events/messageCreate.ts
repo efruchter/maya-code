@@ -148,8 +148,9 @@ export function setupMessageEvent(client: Client): void {
         // Split response if needed
         const chunks = splitMessage(result.text);
 
-        // Create attachments for any image files created
-        const attachments = await createAttachments(result.imageFiles);
+        // Create attachments for image files and explicit [UPLOAD] files
+        const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
+        const attachments = await createAttachments(allAttachmentPaths);
 
         // Send text chunks
         for (let i = 0; i < chunks.length; i++) {

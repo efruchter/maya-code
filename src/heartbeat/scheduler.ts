@@ -64,9 +64,6 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
       return;
     }
 
-    // Wrap with [NO WORK] instruction so Claude can signal nothing to do
-    const prompt = `${userPrompt}\n\nIMPORTANT: If there is no work to do, respond with exactly "[NO WORK]" and nothing else.`;
-
     // Get the Discord channel
     const channel = await client.channels.fetch(channelId);
     if (!channel || !(channel instanceof TextChannel)) {
@@ -87,7 +84,8 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         channelId,
         channelName,
         threadId: null,
-        prompt,
+        prompt: userPrompt,
+        isHeartbeat: true,
       });
 
       clearInterval(typingInterval);
@@ -98,7 +96,8 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         logger.info('Heartbeat completed — no work to do', { channelId });
       } else if (result.text) {
         const chunks = splitMessage(result.text);
-        const attachments = await createAttachments(result.imageFiles);
+        const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
+        const attachments = await createAttachments(allAttachmentPaths);
 
         for (let i = 0; i < chunks.length; i++) {
           const isLast = i === chunks.length - 1;

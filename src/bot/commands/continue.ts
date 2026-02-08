@@ -97,7 +97,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (result.isError) {
       await responder.sendError(result.text);
     } else {
-      const attachments = await createAttachments(result.imageFiles);
+      const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
+      const attachments = await createAttachments(allAttachmentPaths);
       await responder.finalize(result.text, attachments);
 
       const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));

@@ -8,6 +8,7 @@ export interface ClaudeProcessOptions {
   workingDirectory: string;
   prompt: string;
   continueSession?: boolean;
+  appendSystemPrompt?: string;
 }
 
 export interface ClaudeProcessResult {
@@ -18,6 +19,20 @@ export interface ClaudeProcessResult {
   sessionId: string;
   createdFiles: string[];
   imageFiles: string[];
+  uploadFiles: string[];
+}
+
+/**
+ * Extract [UPLOAD: path] tags from text.
+ * Returns the cleaned text and list of file paths to upload.
+ */
+export function extractUploadTags(text: string): { cleanText: string; uploadFiles: string[] } {
+  const uploadFiles: string[] = [];
+  const cleanText = text.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
+    uploadFiles.push(filePath.trim());
+    return '';
+  });
+  return { cleanText: cleanText.trim(), uploadFiles };
 }
 
 export class ClaudeProcess extends EventEmitter {
@@ -42,6 +57,10 @@ export class ClaudeProcess extends EventEmitter {
     ];
 
     args.push('--dangerously-skip-permissions');
+
+    if (this.options.appendSystemPrompt) {
+      args.push('--append-system-prompt', this.options.appendSystemPrompt);
+    }
 
     if (this.options.continueSession) {
       // Resume existing session by ID
@@ -133,6 +152,7 @@ export class ClaudeProcess extends EventEmitter {
             sessionId: this.options.sessionId,
             createdFiles,
             imageFiles,
+            uploadFiles: [],
           });
           return;
         }
@@ -142,14 +162,18 @@ export class ClaudeProcess extends EventEmitter {
           return;
         }
 
+        // Extract [UPLOAD: path] tags from response text
+        const { cleanText, uploadFiles } = extractUploadTags(this.accumulator.getText());
+
         resolve({
-          text: this.accumulator.getText(),
+          text: cleanText,
           durationMs: result?.duration_ms || 0,
           costUsd: result?.total_cost_usd || 0,
           isError: result?.is_error || false,
           sessionId: result?.session_id || this.options.sessionId,
           createdFiles,
           imageFiles,
+          uploadFiles,
         });
       });
     });

@@ -106,8 +106,12 @@ Every message in a channel where the bot is present is automatically sent to Cla
 The bot will:
 - Show a typing indicator while Claude is processing
 - Split long responses across multiple messages
-- Attach any images Claude creates
+- Attach any images Claude creates (png, jpg, gif, webp, svg, bmp)
+- Attach any file Claude explicitly marks with `[UPLOAD: path/to/file]` in its response
 - List any other files Claude creates
+- Queue messages when Claude is busy — no need to wait
+
+Claude is told it's running inside Discord via a system prompt, so it knows about file sharing capabilities.
 
 ### Slash Commands
 
