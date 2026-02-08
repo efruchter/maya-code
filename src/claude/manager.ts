@@ -1,5 +1,5 @@
 import { ClaudeProcess, ClaudeProcessResult } from './process.js';
-import { getOrCreateSession, incrementMessageCount, SessionData } from '../storage/sessions.js';
+import { getOrCreateSession, incrementMessageCount, addCost, SessionData } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
 
@@ -86,6 +86,7 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
     prompt,
     continueSession: shouldContinue,
     appendSystemPrompt: systemPrompt,
+    model: session.model,
   });
 
   activeProcesses.set(processKey, process);
@@ -98,6 +99,9 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
   try {
     const result = await process.run();
     await incrementMessageCount(channelId, threadId);
+    if (result.costUsd > 0) {
+      await addCost(channelId, threadId, result.costUsd);
+    }
     return result;
   } finally {
     activeProcesses.delete(processKey);

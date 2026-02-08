@@ -9,6 +9,7 @@ export interface ClaudeProcessOptions {
   prompt: string;
   continueSession?: boolean;
   appendSystemPrompt?: string;
+  model?: string;
 }
 
 export interface ClaudeProcessResult {
@@ -60,6 +61,10 @@ export class ClaudeProcess extends EventEmitter {
 
     if (this.options.appendSystemPrompt) {
       args.push('--append-system-prompt', this.options.appendSystemPrompt);
+    }
+
+    if (this.options.model) {
+      args.push('--model', this.options.model);
     }
 
     if (this.options.continueSession) {

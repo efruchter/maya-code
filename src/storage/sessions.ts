@@ -18,6 +18,8 @@ export interface SessionData {
   messageCount: number;
   planMode?: boolean;
   heartbeat?: HeartbeatConfig;
+  model?: string;
+  totalCostUsd?: number;
 }
 
 interface StateData {
@@ -128,6 +130,44 @@ export async function setPlanMode(
   }
 
   return false;
+}
+
+/**
+ * Set model for a session
+ */
+export async function setModel(
+  channelId: string,
+  threadId: string | null,
+  model: string | undefined
+): Promise<boolean> {
+  const key = getSessionKey(channelId, threadId);
+  const state = await loadState();
+
+  if (state.sessions[key]) {
+    state.sessions[key].model = model;
+    await saveState(state);
+    logger.info(`Set model to ${model} for session: ${key}`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Add cost to session total
+ */
+export async function addCost(
+  channelId: string,
+  threadId: string | null,
+  costUsd: number
+): Promise<void> {
+  const key = getSessionKey(channelId, threadId);
+  const state = await loadState();
+
+  if (state.sessions[key]) {
+    state.sessions[key].totalCostUsd = (state.sessions[key].totalCostUsd || 0) + costUsd;
+    await saveState(state);
+  }
 }
 
 /**

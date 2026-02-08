@@ -130,6 +130,8 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 | `/restart` | Restart the bot process (requires a process manager to auto-restart) |
 | `/summary` | Ask Claude to summarize the current session and project state |
 | `/show path:<file>` | Upload a file from the project directory to Discord (also lists directories) |
+| `/model [name]` | Set or view the Claude model for this session (aliases: opus, sonnet, haiku) |
+| `/usage` | Show API cost and message count for this session and all sessions |
 
 ### Heartbeat (Autonomous Mode)
 

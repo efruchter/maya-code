@@ -6,6 +6,19 @@ import { config } from '../config.js';
 import fs from 'fs/promises';
 import path from 'path';
 
+const RATE_LIMIT_PATTERNS = [
+  /rate limit/i,
+  /overloaded/i,
+  /too many requests/i,
+  /429/,
+  /capacity/i,
+  /quota/i,
+];
+
+function isRateLimitError(text: string): boolean {
+  return RATE_LIMIT_PATTERNS.some(p => p.test(text));
+}
+
 interface HeartbeatTimer {
   timer: ReturnType<typeof setTimeout>;
   channelId: string;
@@ -92,6 +105,15 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
       const noWork = result.text.trim() === '[NO WORK]';
 
+      // Check for rate limit / overloaded errors — back off silently
+      if (result.isError && isRateLimitError(result.text)) {
+        logger.warn('Heartbeat hit rate limit — backing off', { channelId });
+        clearInterval(typingInterval);
+        // Schedule next tick with double the interval as backoff
+        scheduleTick(channelId, channelName, intervalMs * 2, client);
+        return;
+      }
+
       if (noWork) {
         logger.info('Heartbeat completed — no work to do', { channelId });
       } else if (result.text) {
@@ -123,9 +145,17 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
       }
     } catch (error) {
       clearInterval(typingInterval);
+      const errMsg = error instanceof Error ? error.message : String(error);
+
+      if (isRateLimitError(errMsg)) {
+        logger.warn('Heartbeat hit rate limit — backing off', { channelId });
+        scheduleTick(channelId, channelName, intervalMs * 2, client);
+        return;
+      }
+
       logger.error('Heartbeat Claude run failed', { channelId, error });
       try {
-        await channel.send(`**Heartbeat error:** ${error instanceof Error ? error.message : 'Unknown error'}`);
+        await channel.send(`**Heartbeat error:** ${errMsg}`);
       } catch {
         // Can't send to channel
       }
