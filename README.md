@@ -1,6 +1,6 @@
 # Maya Code
 
-A Discord bot that connects channels to Claude Code CLI sessions. Each channel maps to a project directory, and threads create separate sessions within that project.
+A Discord bot that connects channels to Claude Code CLI sessions. Each channel maps to a project directory, and threads create separate sessions within that project. With the **heartbeat** feature, Claude can work autonomously on a timer — continuing to make progress on a project without human intervention.
 
 ## Architecture
 
