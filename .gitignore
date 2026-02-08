@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+projects/
+state.json
+*.log
+
+# Compiled files in scripts
+scripts/*.js
+scripts/*.d.ts
