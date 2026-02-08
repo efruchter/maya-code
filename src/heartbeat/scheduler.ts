@@ -11,6 +11,7 @@ interface HeartbeatTimer {
   channelId: string;
   channelName: string;
   intervalMs: number;
+  scheduledAt: number;
 }
 
 // Track active heartbeat timers by channel ID (project-level, no thread)
@@ -33,7 +34,7 @@ function scheduleTick(channelId: string, channelName: string, intervalMs: number
   // Don't let the timer keep the process alive
   timer.unref();
 
-  activeTimers.set(channelId, { timer, channelId, channelName, intervalMs });
+  activeTimers.set(channelId, { timer, channelId, channelName, intervalMs, scheduledAt: Date.now() });
 }
 
 /**
@@ -245,6 +246,16 @@ export function stopAll(): void {
  */
 export function isActive(channelId: string): boolean {
   return activeTimers.has(channelId);
+}
+
+/**
+ * Get milliseconds remaining until next heartbeat tick, or null if not active
+ */
+export function getTimeRemainingMs(channelId: string): number | null {
+  const existing = activeTimers.get(channelId);
+  if (!existing) return null;
+  const elapsed = Date.now() - existing.scheduledAt;
+  return Math.max(0, existing.intervalMs - elapsed);
 }
 
 /**

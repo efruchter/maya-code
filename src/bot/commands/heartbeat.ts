@@ -4,7 +4,7 @@ import {
   ThreadChannel,
 } from 'discord.js';
 import { getOrCreateSession, setHeartbeat } from '../../storage/sessions.js';
-import { startHeartbeat, stop, isActive, fireNow } from '../../heartbeat/scheduler.js';
+import { startHeartbeat, stop, isActive, fireNow, getTimeRemainingMs } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 
 const DEFAULT_INTERVAL_MINUTES = 30;
@@ -58,8 +58,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (hb?.enabled) {
       const mins = Math.round(hb.intervalMs / 60000);
       const running = isActive(channelId);
+      const remainingMs = getTimeRemainingMs(channelId);
+      let timerInfo: string;
+      if (running && remainingMs !== null) {
+        const remainMins = Math.floor(remainingMs / 60000);
+        const remainSecs = Math.floor((remainingMs % 60000) / 1000);
+        timerInfo = `(next tick in ${remainMins}m ${remainSecs}s)`;
+      } else {
+        timerInfo = '(timer not running — will restore on restart)';
+      }
       await interaction.editReply(
-        `**Heartbeat:** enabled, every ${mins} minute${mins !== 1 ? 's' : ''} ${running ? '(timer active)' : '(timer not running — will restore on restart)'}\n**Prompt:** ${hb.prompt}`
+        `**Heartbeat:** enabled, every ${mins} minute${mins !== 1 ? 's' : ''} ${timerInfo}\n**Prompt:** ${hb.prompt}`
       );
     } else {
       await interaction.editReply('**Heartbeat:** disabled');
