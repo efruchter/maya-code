@@ -10,6 +10,7 @@ export interface SessionData {
   channelName: string;
   createdAt: string;
   messageCount: number;
+  planMode?: boolean;
 }
 
 interface StateData {
@@ -99,6 +100,27 @@ export async function incrementMessageCount(
     state.sessions[key].messageCount++;
     await saveState(state);
   }
+}
+
+/**
+ * Set plan mode for a session
+ */
+export async function setPlanMode(
+  channelId: string,
+  threadId: string | null,
+  planMode: boolean
+): Promise<boolean> {
+  const key = getSessionKey(channelId, threadId);
+  const state = await loadState();
+
+  if (state.sessions[key]) {
+    state.sessions[key].planMode = planMode;
+    await saveState(state);
+    logger.info(`Set plan mode to ${planMode} for session: ${key}`);
+    return true;
+  }
+
+  return false;
 }
 
 /**

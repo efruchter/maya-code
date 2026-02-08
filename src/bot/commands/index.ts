@@ -7,6 +7,7 @@ import {
 import * as continueCmd from './continue.js';
 import * as clear from './clear.js';
 import * as status from './status.js';
+import * as plan from './plan.js';
 
 export interface Command {
   data: Pick<SlashCommandBuilder, 'name' | 'toJSON'>;
@@ -15,7 +16,7 @@ export interface Command {
 
 export const commands = new Collection<string, Command>();
 
-const commandModules = [continueCmd, clear, status];
+const commandModules = [continueCmd, clear, status, plan];
 
 for (const module of commandModules) {
   commands.set(module.data.name, module as Command);

@@ -75,6 +75,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         name: 'Created',
         value: new Date(session.createdAt).toLocaleString(),
         inline: true,
+      },
+      {
+        name: 'Mode',
+        value: session.planMode ? 'Plan mode' : 'Direct mode',
+        inline: true,
       }
     );
   }
