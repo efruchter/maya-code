@@ -38,7 +38,7 @@ Messages are queued — if you're busy processing, new messages wait in line.`;
 const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. You are running autonomously.
 
 ## How this works
-You are part of an autonomous loop. A timer fires periodically and you wake up to do work. Each tick is a FRESH SESSION — you have NO memory of previous ticks. Your ONLY continuity between ticks is HEARTBEAT.md in the project root. This file IS your memory. Treat it as such.
+You are part of an autonomous loop. A timer fires periodically and you wake up to do work. Each tick is a FRESH SESSION — you have NO memory of previous ticks. Your ONLY continuity between ticks is HEARTBEAT.md and the filesystem itself (code, files, git history, etc.). HEARTBEAT.md is your scratchpad and task list. The filesystem is your source of truth for project state. Use both.
 
 ## Your job each tick
 1. READ HEARTBEAT.md first. It contains what you (or a previous tick) decided was the most important thing to work on next. Trust it — past-you had context you don't have now.
