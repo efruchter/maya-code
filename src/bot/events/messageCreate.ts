@@ -1,6 +1,7 @@
-import { Client, Events, Message, ThreadChannel, AttachmentBuilder } from 'discord.js';
+import { Client, Events, Message, ThreadChannel, AttachmentBuilder, Attachment } from 'discord.js';
 import { runClaude } from '../../claude/manager.js';
 import { resetHeartbeat, setLastUsageLimit } from '../../heartbeat/scheduler.js';
+import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config.js';
 import fs from 'fs/promises';
@@ -74,6 +75,42 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Download Discord attachments to the project's uploads/ directory.
+ * Returns the local file paths.
+ */
+async function downloadAttachments(attachments: Attachment[], channelName: string): Promise<string[]> {
+  if (attachments.length === 0) return [];
+
+  const projectDir = await getProjectDirectory(channelName);
+  const uploadsDir = path.join(projectDir, 'uploads');
+  await fs.mkdir(uploadsDir, { recursive: true });
+
+  const localPaths: string[] = [];
+
+  for (const attachment of attachments) {
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) {
+        logger.warn(`Failed to download attachment ${attachment.name}: ${response.status}`);
+        continue;
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      // Use timestamp to avoid collisions
+      const timestamp = Date.now();
+      const safeName = attachment.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const localPath = path.join(uploadsDir, `${timestamp}_${safeName}`);
+      await fs.writeFile(localPath, buffer);
+      localPaths.push(localPath);
+      logger.debug(`Downloaded attachment to ${localPath}`);
+    } catch (error) {
+      logger.warn(`Failed to download attachment ${attachment.name}:`, error);
+    }
+  }
+
+  return localPaths;
+}
+
+/**
  * Create Discord attachments for files that exist
  */
 async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
@@ -103,8 +140,8 @@ export function setupMessageEvent(client: Client): void {
     if (message.author.bot) return;
     if (message.system) return;
 
-    // Ignore empty messages
-    if (!message.content.trim()) return;
+    // Ignore empty messages (unless they have attachments)
+    if (!message.content.trim() && message.attachments.size === 0) return;
 
     const channel = message.channel;
 
@@ -132,11 +169,24 @@ export function setupMessageEvent(client: Client): void {
     }, 8000);
 
     try {
+      // Download any attachments to the project directory
+      const discordAttachments = [...message.attachments.values()];
+      const localAttachmentPaths = await downloadAttachments(discordAttachments, channelName);
+
+      // Build prompt — include attachment paths so Claude knows about them
+      let prompt = message.content || '';
+      if (localAttachmentPaths.length > 0) {
+        const fileList = localAttachmentPaths.map(p => `![${path.basename(p)}](${p})`).join('\n');
+        prompt = prompt
+          ? `${prompt}\n\nAttached files:\n${fileList}`
+          : `The user sent these files:\n${fileList}`;
+      }
+
       const result = await runClaude({
         channelId,
         channelName,
         threadId,
-        prompt: message.content,
+        prompt,
         onTextUpdate: () => {
           // Keep typing while streaming
         },

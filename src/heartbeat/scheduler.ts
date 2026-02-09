@@ -163,7 +163,7 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
       clearInterval(typingInterval);
 
-      const noWork = result.text.trim() === '[NO WORK]';
+      const noWork = result.text.trim() === '[HEARTBEAT OK]';
 
       // Check for usage limit / rate limit errors
       if (result.isError && isRateLimitError(result.text)) {
