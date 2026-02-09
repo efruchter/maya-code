@@ -118,8 +118,10 @@ export function setupMessageEvent(client: Client): void {
     const channelName = getChannelName(parentChannel);
     const channelId = parentChannel?.id || channel.id;
 
-    // Reset heartbeat timer — human activity pushes back the next tick
-    resetHeartbeat(channelId, client);
+    // Reset heartbeat timer — only for messages in the main channel, not threads
+    if (!isThread) {
+      resetHeartbeat(channelId, client);
+    }
 
     // Show typing indicator
     await channel.sendTyping();

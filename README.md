@@ -126,7 +126,7 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 | `/clear` | Reset the session for this channel/thread |
 | `/status` | Show session info (ID, message count, project directory) |
 | `/plan` | Toggle plan mode (Claude reviews changes before applying) |
-| `/heartbeat action:<prompt\|stop\|status\|test> [interval:<minutes>]` | Configure autonomous heartbeat (see below) |
+| `/heartbeat action:<start\|stop\|status\|test\|goals> [interval:<minutes>]` | Configure self-directed heartbeat via HEARTBEAT.md (see below) |
 | `/restart` | Restart the bot process (requires a process manager to auto-restart) |
 | `/summary` | Ask Claude to summarize the current session and project state |
 | `/show path:<file>` | Upload a file from the project directory to Discord (also lists directories) |
@@ -135,19 +135,25 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 
 ### Heartbeat (Autonomous Mode)
 
-The heartbeat feature lets Claude work autonomously on a project without human intervention. It runs a prompt you provide on a repeating timer, continuing the existing session so Claude has full context.
+The heartbeat feature lets Claude work autonomously on a project without human intervention. Each tick, Claude reads `HEARTBEAT.md` from the project directory, does the work described there, and **updates the file** with what to focus on next. This means Claude is self-directed — it picks its own goals.
 
-**Enable:**
+**Start with default goals:**
 ```
-/heartbeat action:Check for TODOs and continue working on the next item interval:30
+/heartbeat action:start interval:30
 ```
+This creates `HEARTBEAT.md` with generic starter goals (review project, find TODOs, etc.) and begins the timer.
 
-This sets Claude to run the given prompt every 30 minutes of inactivity. The timer resets whenever a human sends a message in the channel, so heartbeats only fire when nobody is actively talking.
+**Start with specific goals:**
+```
+/heartbeat action:Implement the user authentication feature interval:30
+```
+This writes your goals into `HEARTBEAT.md` and starts the timer. Claude will update the file after each tick.
 
-**Check current config:**
+**Check current config and goals:**
 ```
 /heartbeat action:status
 ```
+Shows timer status and a preview of `HEARTBEAT.md`.
 
 **Test-fire immediately:**
 ```
@@ -158,10 +164,9 @@ This sets Claude to run the given prompt every 30 minutes of inactivity. The tim
 ```
 /heartbeat action:stop
 ```
+Stops the timer but preserves `HEARTBEAT.md` so goals carry over next time.
 
-If Claude has nothing to do on a heartbeat tick, it responds with `[NO WORK]` internally and stays silent — no channel spam. Messages are queued when Claude is busy, so you can send follow-ups without waiting.
-
-Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
+**How it works:** The timer resets whenever a human sends a message, so heartbeats only fire during inactivity. If Claude has nothing to do, it responds with `[NO WORK]` internally and stays silent. Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
 
 ### Threads
 

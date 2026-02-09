@@ -2,6 +2,7 @@ import { ClaudeProcess, ClaudeProcessResult } from './process.js';
 import { getOrCreateSession, incrementMessageCount, addCost, SessionData } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface RunOptions {
   channelId: string;
@@ -18,9 +19,31 @@ const DISCORD_SYSTEM_PROMPT = `You are running inside a Discord channel. Your te
 File sharing:
 - Any image files you create (png, jpg, gif, webp, svg, bmp) are AUTOMATICALLY attached to your Discord message.
 - To share any other file with the user in Discord, include [UPLOAD: path/to/file] in your response. The file will be attached and the tag will be removed from the displayed message.
-- You can include multiple [UPLOAD] tags in a single response.`;
+- Markdown image syntax like ![alt](path) and ![[path]] also auto-attaches local files.
+- You can include multiple [UPLOAD] tags in a single response.
 
-const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. If there is no meaningful work to do, respond with exactly "[NO WORK]" and nothing else. Do not greet the user or ask questions — just do the work or respond [NO WORK].`;
+Available slash commands (the user runs these, not you — but you can suggest them):
+- /continue — Continue the conversation (useful after long pauses)
+- /clear — Reset the session and start fresh
+- /status — Show session info
+- /plan — Toggle plan mode (review changes before applying)
+- /heartbeat — Configure autonomous heartbeat timer (self-directed via HEARTBEAT.md)
+- /summary — Get a summary of the current session
+- /show path:<file> — Upload a file from the project to Discord
+- /model [name] — Switch Claude model (opus, sonnet, haiku)
+- /usage — Show API cost and usage stats
+- /restart — Restart the bot
+
+Messages are queued — if you're busy processing, new messages wait in line.`;
+
+const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human.
+
+Your instructions are in HEARTBEAT.md in the project root. Read it first.
+- Do the work described in HEARTBEAT.md
+- After completing work, UPDATE HEARTBEAT.md with what you want to focus on next time
+- Keep HEARTBEAT.md concise — a few bullet points of current goals and status
+- If there is genuinely no meaningful work to do, respond with exactly "[NO WORK]" and nothing else
+- Do not greet the user or ask questions — just do the work or respond [NO WORK]`;
 
 // Track active processes by session key
 const activeProcesses = new Map<string, ClaudeProcess>();
@@ -65,14 +88,17 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
   // Get project directory
   const workingDirectory = await getProjectDirectory(channelName);
 
+  // Heartbeats use a fresh throwaway session each tick
+  const heartbeatSessionId = isHeartbeat ? uuidv4() : null;
+  const sessionId = heartbeatSessionId || session.sessionId;
+  const shouldContinue = isHeartbeat ? false : (continueSession || session.messageCount > 0);
+
   logger.info('Starting Claude process', {
-    sessionId: session.sessionId,
+    sessionId,
     channelName,
     workingDirectory,
+    isHeartbeat: !!isHeartbeat,
   });
-
-  // Automatically continue if session has been used before
-  const shouldContinue = continueSession || session.messageCount > 0;
 
   // Build system prompt
   let systemPrompt = DISCORD_SYSTEM_PROMPT;
@@ -81,7 +107,7 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
   }
 
   const process = new ClaudeProcess({
-    sessionId: session.sessionId,
+    sessionId,
     workingDirectory,
     prompt,
     continueSession: shouldContinue,

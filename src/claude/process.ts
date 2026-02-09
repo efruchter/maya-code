@@ -24,15 +24,33 @@ export interface ClaudeProcessResult {
 }
 
 /**
- * Extract [UPLOAD: path] tags from text.
+ * Extract [UPLOAD: path] tags and markdown image references to local files from text.
+ * Markdown images like ![alt](/absolute/path.png) or ![alt](relative/path.png) are
+ * converted to attachments so they display in Discord instead of showing as raw text.
  * Returns the cleaned text and list of file paths to upload.
  */
 export function extractUploadTags(text: string): { cleanText: string; uploadFiles: string[] } {
   const uploadFiles: string[] = [];
-  const cleanText = text.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
+
+  // Extract [UPLOAD: path] tags
+  let cleanText = text.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
     uploadFiles.push(filePath.trim());
     return '';
   });
+
+  // Extract markdown image references to local files: ![alt](path)
+  // Matches paths that start with / or ./ or ../ or don't start with http
+  cleanText = cleanText.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (_match, alt: string, filePath: string) => {
+    uploadFiles.push(filePath.trim());
+    return alt ? `*${alt}*` : '';
+  });
+
+  // Extract Obsidian-style image embeds: ![[path]]
+  cleanText = cleanText.replace(/!\[\[([^\]]+)\]\]/g, (_match, filePath: string) => {
+    uploadFiles.push(filePath.trim());
+    return '';
+  });
+
   return { cleanText: cleanText.trim(), uploadFiles };
 }
 
