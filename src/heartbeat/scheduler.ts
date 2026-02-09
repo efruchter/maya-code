@@ -1,5 +1,5 @@
 import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
-import { runClaude, isProcessRunning } from '../claude/manager.js';
+import { runClaude } from '../claude/manager.js';
 import { getSession } from '../storage/sessions.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
@@ -127,13 +127,6 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
     if (!session?.heartbeat?.enabled) {
       logger.info('Heartbeat no longer enabled, stopping', { channelId });
       activeTimers.delete(channelId);
-      return;
-    }
-
-    // Skip if a process is already running
-    if (isProcessRunning(channelId, null)) {
-      logger.info('Heartbeat skipped — process already running', { channelId });
-      scheduleTick(channelId, channelName, intervalMs, client);
       return;
     }
 
