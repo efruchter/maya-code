@@ -15,9 +15,12 @@ const DEFAULT_INTERVAL_MINUTES = 30;
 const DEFAULT_HEARTBEAT_GOALS = `# Heartbeat Goals
 
 ## Current Focus
-- Review the project and identify what needs work
-- Look for TODOs, bugs, or incomplete features
-- Make incremental progress on the most important task
+- Explore the project — read the README, browse the code, understand the architecture
+- Identify what needs work: TODOs, bugs, incomplete features, missing tests
+- Pick the single most impactful task and make progress on it
+
+## Next Steps
+_To be filled in after first tick — what should the next heartbeat focus on?_
 
 ## Status
 _No work done yet — this is the initial heartbeat._

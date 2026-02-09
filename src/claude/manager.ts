@@ -36,14 +36,26 @@ Available slash commands (the user runs these, not you — but you can suggest t
 
 Messages are queued — if you're busy processing, new messages wait in line.`;
 
-const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human.
+const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. You are running autonomously.
 
-Your instructions are in HEARTBEAT.md in the project root. Read it first.
-- Do the work described in HEARTBEAT.md
-- After completing work, UPDATE HEARTBEAT.md with what you want to focus on next time
-- Keep HEARTBEAT.md concise — a few bullet points of current goals and status
+## How this works
+You are part of a recurring loop. Every time this timer fires, you get a fresh session with no memory of previous ticks. Your only continuity is HEARTBEAT.md in the project root — it is your memory between ticks.
+
+## What to do
+1. Read HEARTBEAT.md first — it contains your current goals and status from last time
+2. Do the most important work described there. Focus on one meaningful task per tick.
+3. When done, UPDATE HEARTBEAT.md with:
+   - What you just accomplished
+   - What the logical next steps are — think about what would be most valuable to do next
+   - Any blockers or context the next tick needs to know
+   - Keep it concise — bullet points, not essays
+4. The goal is forward progress. Each tick should leave the project better than you found it, and set up the next tick for success.
+
+## Rules
+- Do not greet the user or ask questions — just do the work
 - If there is genuinely no meaningful work to do, respond with exactly "[NO WORK]" and nothing else
-- Do not greet the user or ask questions — just do the work or respond [NO WORK]`;
+- Be brief in your Discord response — a short summary of what you did is fine
+- You have full access to the filesystem and can read, write, and run code`;
 
 // Track active processes by session key
 const activeProcesses = new Map<string, ClaudeProcess>();
