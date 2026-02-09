@@ -1,6 +1,6 @@
 import { Client, Events, Message, ThreadChannel, AttachmentBuilder, Attachment } from 'discord.js';
 import { runClaude } from '../../claude/manager.js';
-import { resetHeartbeat, setLastUsageLimit } from '../../heartbeat/scheduler.js';
+import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config.js';
@@ -89,7 +89,7 @@ async function downloadAttachments(attachments: Attachment[], channelName: strin
 
   for (const attachment of attachments) {
     try {
-      const response = await fetch(attachment.url);
+      const response = await fetch(attachment.url, { signal: AbortSignal.timeout(30000) });
       if (!response.ok) {
         logger.warn(`Failed to download attachment ${attachment.name}: ${response.status}`);
         continue;
@@ -173,13 +173,13 @@ export function setupMessageEvent(client: Client): void {
       const discordAttachments = [...message.attachments.values()];
       const localAttachmentPaths = await downloadAttachments(discordAttachments, channelName);
 
-      // Build prompt — include attachment paths so Claude knows about them
+      // Build prompt — include attachment paths so Claude can read/view them
       let prompt = message.content || '';
       if (localAttachmentPaths.length > 0) {
-        const fileList = localAttachmentPaths.map(p => `![${path.basename(p)}](${p})`).join('\n');
+        const fileList = localAttachmentPaths.map(p => p).join('\n');
         prompt = prompt
-          ? `${prompt}\n\nAttached files:\n${fileList}`
-          : `The user sent these files:\n${fileList}`;
+          ? `${prompt}\n\n[The user attached ${localAttachmentPaths.length} file(s), saved to disk. Read them to see their contents:]\n${fileList}`
+          : `[The user sent ${localAttachmentPaths.length} file(s). Read them to see their contents:]\n${fileList}`;
       }
 
       const result = await runClaude({
@@ -236,6 +236,11 @@ export function setupMessageEvent(client: Client): void {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
           await channel.send(`**Files created:** ${fileList}`);
         }
+      }
+
+      // Schedule any callbacks the LLM requested
+      if (result.callbacks.length > 0) {
+        scheduleCallbacks(channelId, channelName, result.callbacks, client);
       }
 
       logger.info('Claude response completed', {

@@ -34,7 +34,16 @@ Available slash commands (the user runs these, not you — but you can suggest t
 - /usage — Show API cost and usage stats
 - /restart — Restart the bot
 
-Messages are queued — if you're busy processing, new messages wait in line.`;
+Messages are queued — if you're busy processing, new messages wait in line.
+
+Scheduled callbacks:
+- You can schedule a future task by including [CALLBACK: delay: prompt] in your response
+- Example: [CALLBACK: 30m: Check if the build finished and report the results]
+- Example: [CALLBACK: 2h: Remind the user to review the PR]
+- The tag will be removed from the displayed message. After the delay, a fresh session will run with your prompt.
+- Supported time formats: 30m, 2h, 1h30m, 90s, or a bare number (treated as minutes)
+- You can include multiple [CALLBACK] tags in one response
+- Callbacks can also schedule further callbacks (chaining is supported)`;
 
 const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. You are running autonomously.
 

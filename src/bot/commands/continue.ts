@@ -8,6 +8,7 @@ import {
 import { runClaude, isProcessRunning } from '../../claude/manager.js';
 import { getSession } from '../../storage/sessions.js';
 import { DiscordResponder } from '../../discord/responder.js';
+import { scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -109,6 +110,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
           await ch.send(`**Files created:** ${fileList}`);
         }
       }
+    }
+
+    // Schedule any callbacks the LLM requested
+    if (result.callbacks.length > 0) {
+      scheduleCallbacks(channelId, channelName, result.callbacks, interaction.client);
     }
 
     logger.info('Claude continue completed', {

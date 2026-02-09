@@ -12,6 +12,11 @@ export interface ClaudeProcessOptions {
   model?: string;
 }
 
+export interface ScheduledCallback {
+  delayMs: number;
+  prompt: string;
+}
+
 export interface ClaudeProcessResult {
   text: string;
   durationMs: number;
@@ -21,19 +26,60 @@ export interface ClaudeProcessResult {
   createdFiles: string[];
   imageFiles: string[];
   uploadFiles: string[];
+  callbacks: ScheduledCallback[];
 }
 
 /**
- * Extract [UPLOAD: path] tags and markdown image references to local files from text.
- * Markdown images like ![alt](/absolute/path.png) or ![alt](relative/path.png) are
- * converted to attachments so they display in Discord instead of showing as raw text.
- * Returns the cleaned text and list of file paths to upload.
+ * Parse a time duration string like "30m", "2h", "1h30m", "90s" into milliseconds.
  */
-export function extractUploadTags(text: string): { cleanText: string; uploadFiles: string[] } {
+export function parseDelay(delayStr: string): number | null {
+  const str = delayStr.trim().toLowerCase();
+  let totalMs = 0;
+  let matched = false;
+
+  // Match patterns like 2h, 30m, 90s
+  const regex = /(\d+)\s*(h|hr|hrs|hours?|m|min|mins|minutes?|s|sec|secs|seconds?)/g;
+  let match;
+  while ((match = regex.exec(str)) !== null) {
+    const value = parseInt(match[1]);
+    const unit = match[2][0]; // first char: h, m, or s
+    if (unit === 'h') totalMs += value * 60 * 60 * 1000;
+    else if (unit === 'm') totalMs += value * 60 * 1000;
+    else if (unit === 's') totalMs += value * 1000;
+    matched = true;
+  }
+
+  // Also support bare number (treat as minutes)
+  if (!matched && /^\d+$/.test(str)) {
+    totalMs = parseInt(str) * 60 * 1000;
+    matched = true;
+  }
+
+  return matched && totalMs > 0 ? totalMs : null;
+}
+
+/**
+ * Extract special tags from response text:
+ * - [UPLOAD: path] tags for file attachments
+ * - ![alt](path) and ![[path]] markdown images for local file attachments
+ * - [CALLBACK: delay: prompt] for scheduled one-shot callbacks
+ * Returns cleaned text, file paths, and scheduled callbacks.
+ */
+export function extractResponseTags(text: string): { cleanText: string; uploadFiles: string[]; callbacks: ScheduledCallback[] } {
   const uploadFiles: string[] = [];
+  const callbacks: ScheduledCallback[] = [];
+
+  // Extract [CALLBACK: delay: prompt] tags
+  let cleanText = text.replace(/\[CALLBACK:\s*([^:]+?):\s*(.+?)\]/g, (_match, delayStr: string, prompt: string) => {
+    const delayMs = parseDelay(delayStr);
+    if (delayMs) {
+      callbacks.push({ delayMs, prompt: prompt.trim() });
+    }
+    return '';
+  });
 
   // Extract [UPLOAD: path] tags
-  let cleanText = text.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
+  cleanText = cleanText.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
     uploadFiles.push(filePath.trim());
     return '';
   });
@@ -51,7 +97,7 @@ export function extractUploadTags(text: string): { cleanText: string; uploadFile
     return '';
   });
 
-  return { cleanText: cleanText.trim(), uploadFiles };
+  return { cleanText: cleanText.trim(), uploadFiles, callbacks };
 }
 
 export class ClaudeProcess extends EventEmitter {
@@ -176,6 +222,7 @@ export class ClaudeProcess extends EventEmitter {
             createdFiles,
             imageFiles,
             uploadFiles: [],
+            callbacks: [],
           });
           return;
         }
@@ -185,8 +232,8 @@ export class ClaudeProcess extends EventEmitter {
           return;
         }
 
-        // Extract [UPLOAD: path] tags from response text
-        const { cleanText, uploadFiles } = extractUploadTags(this.accumulator.getText());
+        // Extract special tags from response text
+        const { cleanText, uploadFiles, callbacks } = extractResponseTags(this.accumulator.getText());
 
         resolve({
           text: cleanText,
@@ -197,6 +244,7 @@ export class ClaudeProcess extends EventEmitter {
           createdFiles,
           imageFiles,
           uploadFiles,
+          callbacks,
         });
       });
     });

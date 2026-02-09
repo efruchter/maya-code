@@ -1,5 +1,6 @@
 import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
 import { runClaude } from '../claude/manager.js';
+import { ScheduledCallback } from '../claude/process.js';
 import { getSession } from '../storage/sessions.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
@@ -210,6 +211,11 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
           await channel.send(`**Files created:** ${fileList}`);
         }
 
+        // Schedule any callbacks the LLM requested
+        if (result.callbacks.length > 0) {
+          scheduleCallbacks(channelId, channelName, result.callbacks, client);
+        }
+
         logger.info('Heartbeat completed', {
           channelId,
           durationMs: result.durationMs,
@@ -387,5 +393,108 @@ export async function restoreHeartbeats(client: Client): Promise<void> {
     if (session.heartbeat?.enabled && session.heartbeat.intervalMs > 0 && !session.threadId) {
       startHeartbeat(session.channelId, session.channelName, session.heartbeat.intervalMs, client);
     }
+  }
+}
+
+// ---- Scheduled Callbacks ----
+// One-shot timers: the LLM can schedule a future session with a specific prompt.
+
+const activeCallbacks: Map<string, ReturnType<typeof setTimeout>[]> = new Map();
+
+/**
+ * Schedule one-shot callbacks from a Claude response.
+ * Each callback fires a fresh session with the given prompt after the delay.
+ */
+export function scheduleCallbacks(
+  channelId: string,
+  channelName: string,
+  callbacks: ScheduledCallback[],
+  client: Client
+): void {
+  for (const cb of callbacks) {
+    const delayMins = Math.round(cb.delayMs / 60000);
+    logger.info(`Scheduling callback in ${delayMins}m`, { channelId, prompt: cb.prompt.slice(0, 100) });
+
+    const timer = setTimeout(async () => {
+      // Remove this timer from tracking
+      const timers = activeCallbacks.get(channelId);
+      if (timers) {
+        const idx = timers.indexOf(timer);
+        if (idx >= 0) timers.splice(idx, 1);
+      }
+
+      try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !(channel instanceof TextChannel)) {
+          logger.warn('Callback channel not found', { channelId });
+          return;
+        }
+
+        await channel.sendTyping();
+        const typingInterval = setInterval(() => {
+          channel.sendTyping().catch(() => {});
+        }, 8000);
+
+        try {
+          const result = await runClaude({
+            channelId,
+            channelName,
+            threadId: null,
+            prompt: cb.prompt,
+            isHeartbeat: true, // fresh session, same mechanics
+          });
+
+          clearInterval(typingInterval);
+
+          const noWork = result.text.trim() === '[HEARTBEAT OK]';
+
+          if (result.isError && isRateLimitError(result.text)) {
+            lastUsageLimitMessage = result.text;
+            lastUsageLimitTime = Date.now();
+            try {
+              await channel.send('**Scheduled callback hit rate limit.** Try again later.');
+            } catch { /* can't send */ }
+            return;
+          }
+
+          if (!noWork && result.text) {
+            const chunks = splitMessage(result.text);
+            const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
+            const attachments = await createAttachments(allAttachmentPaths);
+
+            for (let i = 0; i < chunks.length; i++) {
+              const isLast = i === chunks.length - 1;
+              await channel.send({
+                content: chunks[i],
+                files: isLast && attachments.length > 0 ? attachments : undefined,
+              });
+            }
+
+            // Handle any callbacks from the callback response (nested scheduling)
+            if (result.callbacks.length > 0) {
+              scheduleCallbacks(channelId, channelName, result.callbacks, client);
+            }
+          }
+
+          logger.info('Callback completed', { channelId, durationMs: result.durationMs });
+        } catch (error) {
+          clearInterval(typingInterval);
+          logger.error('Callback Claude run failed', { channelId, error });
+          try {
+            await channel.send(`**Callback error:** ${error instanceof Error ? error.message : String(error)}`);
+          } catch { /* can't send */ }
+        }
+      } catch (error) {
+        logger.error('Callback execution error', { channelId, error });
+      }
+    }, cb.delayMs);
+
+    timer.unref();
+
+    // Track the timer
+    if (!activeCallbacks.has(channelId)) {
+      activeCallbacks.set(channelId, []);
+    }
+    activeCallbacks.get(channelId)!.push(timer);
   }
 }
