@@ -7,6 +7,8 @@ import { config } from '../config.js';
 import { detectBackend } from '../models.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+import fsPromises from 'fs/promises';
+import pathModule from 'path';
 
 export type { BackendProcessResult } from './types.js';
 export type { ScheduledCallback } from './types.js';
@@ -18,71 +20,40 @@ export interface RunOptions {
   prompt: string;
   continueSession?: boolean;
   isHeartbeat?: boolean;
+  imageInputs?: string[];
   onTextUpdate?: (text: string) => void;
 }
 
-const DISCORD_SYSTEM_PROMPT = `You are running inside a Discord channel. Your text responses will be posted as messages.
+// Prompt cache — loaded once from prompts/*.md, falls back to defaults
+let cachedSystemPrompt: string | null = null;
+let cachedHeartbeatAddition: string | null = null;
 
-Important — sessions are ephemeral:
-- Your conversation context can be reset at any time (/clear, /reset, restarts). The filesystem is your permanent memory.
-- Always check existing files, README, and project state before starting work — past sessions may have left important context.
-- Write down plans, decisions, progress, and TODOs in files (e.g. README.md, TODO.md, CLAUDE.md). Don't rely on conversation history to remember things.
-- If something is important, put it in a file. If you made a decision, document it. The next session should be able to pick up where you left off just by reading the project.
-- HEARTBEAT.md is the central planning document — it holds active goals, current status, and next steps. Check it first for ongoing tasks. It can reference other docs for details, but HEARTBEAT.md is your active memory for what needs to happen next.
+const DEFAULT_SYSTEM_PROMPT = `You are running inside a Discord channel. Your text responses will be posted as messages.`;
+const DEFAULT_HEARTBEAT_ADDITION = `This message is from an automated heartbeat timer, not a human. You are running autonomously. Read HEARTBEAT.md and do the work described there. Update it when done.`;
 
-File sharing:
-- To show an image or file to the user, use markdown image syntax: ![description](path/to/file) — it will be automatically attached to the Discord message. ALWAYS use this when you want the user to see a file.
-- Any image files you create (png, jpg, gif, webp, svg, bmp) are also AUTOMATICALLY attached to your Discord message.
-- [UPLOAD: path/to/file] tags also work for attaching files.
-- Discord limits attachments to 10 per message. If you need to share more, split across multiple responses or pick the most important ones.
+async function loadPrompt(filename: string, fallback: string): Promise<string> {
+  try {
+    const filePath = pathModule.join(config.promptsDirectory, filename);
+    return await fsPromises.readFile(filePath, 'utf-8');
+  } catch {
+    logger.warn(`Prompt file ${filename} not found, using default`);
+    return fallback;
+  }
+}
 
-Available slash commands (the user runs these, not you — but you can suggest them):
-- /continue — Continue the conversation (useful after long pauses)
-- /clear — Reset the session and start fresh
-- /status — Show session info
-- /plan — Toggle plan mode (review changes before applying)
-- /heartbeat — Configure autonomous heartbeat timer (self-directed via HEARTBEAT.md)
-- /summary — Get a summary of the current session
-- /show path:<file> — Upload a file from the project to Discord
-- /model [name] — Switch model (opus, sonnet, haiku, codex, 5.2, etc.)
-- /usage — Show API cost and usage stats
-- /restart — Restart the bot
+async function getSystemPrompt(): Promise<string> {
+  if (cachedSystemPrompt === null) {
+    cachedSystemPrompt = await loadPrompt('system.md', DEFAULT_SYSTEM_PROMPT);
+  }
+  return cachedSystemPrompt;
+}
 
-Messages are queued — if you're busy processing, new messages wait in line.
-
-Scheduled callbacks:
-- You can schedule a future task by including [CALLBACK: delay: prompt] in your response
-- Example: [CALLBACK: 30m: Check if the build finished and report the results]
-- Example: [CALLBACK: 2h: Remind the user to review the PR]
-- The tag will be removed from the displayed message. After the delay, a fresh session will run with your prompt.
-- Supported time formats: 30m, 2h, 1h30m, 90s, or a bare number (treated as minutes)
-- You can include multiple [CALLBACK] tags in one response
-- Callbacks can also schedule further callbacks (chaining is supported)`;
-
-const HEARTBEAT_ADDITION = `\n\nThis message is from an automated heartbeat timer, not a human. You are running autonomously.
-
-## How this works
-You are part of an autonomous loop. A timer fires periodically and you wake up to do work. Each tick is a FRESH SESSION — you have NO memory of previous ticks. Your ONLY continuity between ticks is HEARTBEAT.md and the filesystem itself (code, files, git history, etc.). HEARTBEAT.md is your scratchpad and task list. The filesystem is your source of truth for project state. Use both.
-
-## Your job each tick
-1. READ HEARTBEAT.md first. It contains what you (or a previous tick) decided was the most important thing to work on next. Trust it — past-you had context you don't have now.
-2. DO THE WORK described there. Focus on one meaningful, completable task per tick. Don't try to do everything — do one thing well.
-3. UPDATE HEARTBEAT.md when you're done. This is critical. Think carefully about:
-   - What you just accomplished (so the next tick has context)
-   - What the BEST next step is — what would move the project forward the most? What's the highest-value thing to do next? Be specific and actionable.
-   - Any blockers, warnings, or context the next tick needs to know
-   - Keep it concise — bullet points, not essays. The next tick needs to orient fast.
-4. The goal is steady forward progress. Each tick should leave the project better than you found it, and set up the next tick to be productive immediately.
-
-## Think ahead
-You are your own project manager. Don't just finish a task and stop — think about the bigger picture. What are the project's goals? What's blocking progress? What would the human want done? Write next steps that a fresh session can pick up and run with without needing to re-discover context.
-
-## Rules
-- Do not greet the user or ask questions — there is no human here, just do the work
-- If there is genuinely no meaningful work to do, respond with exactly "[HEARTBEAT OK]" and nothing else
-- Be brief in your Discord response — a short summary of what you did is enough
-- You have full access to the filesystem and can read, write, and run code
-- If you hit an error or blocker, document it in HEARTBEAT.md so the next tick can try a different approach`;
+async function getHeartbeatAddition(): Promise<string> {
+  if (cachedHeartbeatAddition === null) {
+    cachedHeartbeatAddition = await loadPrompt('heartbeat.md', DEFAULT_HEARTBEAT_ADDITION);
+  }
+  return cachedHeartbeatAddition;
+}
 
 // Track active processes by session key
 const activeProcesses = new Map<string, BackendProcess>();
@@ -120,7 +91,7 @@ export function runClaude(options: RunOptions): Promise<BackendProcessResult> {
 }
 
 async function runBackendImmediate(options: RunOptions): Promise<BackendProcessResult> {
-  const { channelId, channelName, threadId, prompt, continueSession, isHeartbeat, onTextUpdate } = options;
+  const { channelId, channelName, threadId, prompt, continueSession, isHeartbeat, imageInputs, onTextUpdate } = options;
   const processKey = getProcessKey(channelId, threadId);
 
   const session = await getOrCreateSession(channelId, threadId, channelName);
@@ -143,9 +114,9 @@ async function runBackendImmediate(options: RunOptions): Promise<BackendProcessR
     isHeartbeat: !!isHeartbeat,
   });
 
-  let systemPrompt = DISCORD_SYSTEM_PROMPT;
+  let systemPrompt = await getSystemPrompt();
   if (isHeartbeat) {
-    systemPrompt += HEARTBEAT_ADDITION;
+    systemPrompt += '\n\n' + await getHeartbeatAddition();
   }
 
   const processOptions = {
@@ -156,6 +127,7 @@ async function runBackendImmediate(options: RunOptions): Promise<BackendProcessR
     appendSystemPrompt: systemPrompt,
     model,
     planMode: !isHeartbeat && session.planMode,
+    imageInputs,
   };
 
   // Create the right backend process

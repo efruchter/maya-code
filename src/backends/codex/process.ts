@@ -46,6 +46,13 @@ export class CodexProcess extends BackendProcess {
       args.push('--config', `model_instructions_file=${this.tmpPromptFile}`);
     }
 
+    // Image inputs
+    if (this.options.imageInputs?.length) {
+      for (const img of this.options.imageInputs) {
+        args.push('-i', img);
+      }
+    }
+
     // Session resume
     if (this.options.continueSession) {
       args.push('resume', this.options.sessionId);

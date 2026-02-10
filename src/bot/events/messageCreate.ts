@@ -3,8 +3,8 @@ import { runClaude } from '../../backends/manager.js';
 import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
+import { splitMessage } from '../../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../../utils/git.js';
-import { config } from '../../config.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -13,54 +13,6 @@ function getChannelName(channel: unknown): string {
     return channel.name;
   }
   return 'default';
-}
-
-/**
- * Split text at safe boundaries for Discord's 2000 char limit
- */
-function splitMessage(text: string): string[] {
-  const MAX_LENGTH = config.discord.maxMessageLength;
-  if (text.length <= MAX_LENGTH) {
-    return [text];
-  }
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_LENGTH) {
-      chunks.push(remaining);
-      break;
-    }
-
-    let splitPoint = MAX_LENGTH;
-
-    // Try to split at code block boundary
-    const codeBlockEnd = remaining.lastIndexOf('\n```', MAX_LENGTH);
-    if (codeBlockEnd > MAX_LENGTH / 2) {
-      const lineEnd = remaining.indexOf('\n', codeBlockEnd + 1);
-      if (lineEnd > 0 && lineEnd < MAX_LENGTH) {
-        splitPoint = lineEnd + 1;
-      }
-    } else {
-      // Try to split at newline
-      const newlinePos = remaining.lastIndexOf('\n', MAX_LENGTH);
-      if (newlinePos > MAX_LENGTH / 2) {
-        splitPoint = newlinePos + 1;
-      } else {
-        // Try to split at space
-        const spacePos = remaining.lastIndexOf(' ', MAX_LENGTH);
-        if (spacePos > MAX_LENGTH / 2) {
-          splitPoint = spacePos + 1;
-        }
-      }
-    }
-
-    chunks.push(remaining.slice(0, splitPoint));
-    remaining = remaining.slice(splitPoint);
-  }
-
-  return chunks;
 }
 
 /**
@@ -187,11 +139,18 @@ export function setupMessageEvent(client: Client): void {
       const projectDir = await getProjectDirectory(channelName);
       await autoCommit(projectDir, `Pre-message snapshot`);
 
+      // Filter image files for Codex's -i flag
+      const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'];
+      const imageInputs = localAttachmentPaths.filter(p =>
+        IMAGE_EXTS.some(ext => p.toLowerCase().endsWith(ext))
+      );
+
       const result = await runClaude({
         channelId,
         channelName,
         threadId,
         prompt,
+        imageInputs: imageInputs.length > 0 ? imageInputs : undefined,
         onTextUpdate: () => {
           // Keep typing while streaming
         },
