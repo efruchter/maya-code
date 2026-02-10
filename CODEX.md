@@ -16,11 +16,25 @@ This is the bot-wide default. Every session uses this model unless overridden vi
 
 **Via `/model` command:**
 ```
-/model opus          → resolves to claude-opus-4-6 (Claude backend)
-/model sonnet        → resolves to claude-sonnet-4-5-20250929 (Claude backend)
-/model haiku         → resolves to claude-haiku-4-5-20251001 (Claude backend)
-/model codex         → resolves to gpt-5.3-codex (Codex backend)
-/model gpt-5.2-codex → exact match (Codex backend)
+# Claude models
+/model opus          → claude-opus-4-6
+/model sonnet        → claude-sonnet-4-5-20250929
+/model haiku         → claude-haiku-4-5-20251001
+
+# Codex models
+/model codex         → gpt-5.3-codex (latest)
+/model 5.3           → gpt-5.3-codex
+/model 5.2           → gpt-5.2-codex
+/model 5.1           → gpt-5.1-codex
+/model 5.1-mini      → gpt-5.1-codex-mini
+/model 5.1-max       → gpt-5.1-codex-max
+/model gpt5          → gpt-5-codex
+/model gpt5-mini     → gpt-5-codex-mini
+
+# Exact model IDs also work
+/model gpt-5.2-codex → exact match
+
+# Reset
 /model default       → resets to .env MODEL value
 ```
 
@@ -51,21 +65,59 @@ export const config = {
 
 ### 2. Model registry (NEW: `src/models.ts`)
 
-Central place for aliases, fuzzy matching, and backend detection:
+Central place for aliases, fuzzy matching, and backend detection.
+
+**Full model table:**
+
+| Alias | Model ID | Backend | Notes |
+|---|---|---|---|
+| `opus` | `claude-opus-4-6` | claude | Most capable Claude |
+| `sonnet` | `claude-sonnet-4-5-20250929` | claude | Fast + capable |
+| `haiku` | `claude-haiku-4-5-20251001` | claude | Fastest / cheapest Claude |
+| `codex` | `gpt-5.3-codex` | codex | Latest Codex model |
+| `5.3` | `gpt-5.3-codex` | codex | Alias for latest |
+| `5.2` | `gpt-5.2-codex` | codex | Previous gen |
+| `5.1` | `gpt-5.1-codex` | codex | |
+| `5.1-mini` | `gpt-5.1-codex-mini` | codex | Smaller / cheaper |
+| `5.1-max` | `gpt-5.1-codex-max` | codex | Extended capabilities |
+| `gpt5` | `gpt-5-codex` | codex | Earlier gen |
+| `gpt5-mini` | `gpt-5-codex-mini` | codex | Earlier gen small |
+
 ```typescript
-const MODEL_ALIASES: Record<string, string> = {
-  opus: 'claude-opus-4-6',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-  codex: 'gpt-5.3-codex',
-};
+interface ModelEntry {
+  alias: string;
+  modelId: string;
+  backend: 'claude' | 'codex';
+}
+
+const MODELS: ModelEntry[] = [
+  // Claude
+  { alias: 'opus',     modelId: 'claude-opus-4-6',              backend: 'claude' },
+  { alias: 'sonnet',   modelId: 'claude-sonnet-4-5-20250929',   backend: 'claude' },
+  { alias: 'haiku',    modelId: 'claude-haiku-4-5-20251001',    backend: 'claude' },
+  // Codex
+  { alias: 'codex',    modelId: 'gpt-5.3-codex',               backend: 'codex' },
+  { alias: '5.3',      modelId: 'gpt-5.3-codex',               backend: 'codex' },
+  { alias: '5.2',      modelId: 'gpt-5.2-codex',               backend: 'codex' },
+  { alias: '5.1',      modelId: 'gpt-5.1-codex',               backend: 'codex' },
+  { alias: '5.1-mini', modelId: 'gpt-5.1-codex-mini',          backend: 'codex' },
+  { alias: '5.1-max',  modelId: 'gpt-5.1-codex-max',           backend: 'codex' },
+  { alias: 'gpt5',     modelId: 'gpt-5-codex',                 backend: 'codex' },
+  { alias: 'gpt5-mini',modelId: 'gpt-5-codex-mini',            backend: 'codex' },
+];
 
 type Backend = 'claude' | 'codex';
 
 function detectBackend(modelId: string): Backend;
 function resolveModel(input: string): { modelId: string; backend: Backend };
-function getAvailableModels(): { alias: string; modelId: string; backend: Backend }[];
+function getAvailableModels(): ModelEntry[];
 ```
+
+**Fuzzy matching logic:**
+1. Exact alias match (`opus` → `claude-opus-4-6`)
+2. Exact model ID match (`gpt-5.2-codex` → itself)
+3. Substring match on model IDs (`5.2` → `gpt-5.2-codex`)
+4. No match → use raw string as-is, detect backend from model ID string
 
 ### 3. Session storage changes (`src/storage/sessions.ts`)
 
