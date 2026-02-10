@@ -11,7 +11,7 @@ With the **heartbeat** feature, Claude can work autonomously on a timer — read
 ## How I Use It
 I treat maya code like a team of developers. I have them write down what they want to accomplish, and check in with me as they complete their work. It's claude code running on your PC, so you can hook it up to anything else in your pipeline. You can have the agents prepare documents and images for you, take screenshots of their progress and post it... Whatever setup you can imagine, it can probably work with the right instruction crafting. Encourage them to make use of the filesystem (or just let the system prompt do it's thing).
 
-Want to spin up a new project? Just go to your server and Create Channel. Nodle around with random ideas from your couch. 🐺
+Want to spin up a new project? Just go to your server and Create Channel. Noodle around with random ideas from your couch. 🐺
 
 Why Discord? It's very convenient and the bot API is excellent.
 Why Maya? LLM's create the illusion of sentience and competence. It's very convincing at times!
