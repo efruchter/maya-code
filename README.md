@@ -252,7 +252,7 @@ maya-code/
 
 2. Sessions persist across bot restarts via `state.json`
 
-3. Files created by Claude are tracked and attached to Discord messages (deduplicated)
+3. Files changed by Claude are tracked and attached to Discord messages (deduplicated)
 
 4. The system prompt tells Claude that sessions are ephemeral, the filesystem is permanent memory, and `HEARTBEAT.md` is the central planning document
 

@@ -239,7 +239,7 @@ export function setupMessageEvent(client: Client): void {
         );
         if (nonImageFiles.length > 0) {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
-          await channel.send(`**Files created:** ${fileList}`);
+          await channel.send(`**Files changed:** ${fileList}`);
         }
       }
 

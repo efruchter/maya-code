@@ -107,7 +107,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const ch = interaction.channel as TextChannel | ThreadChannel | null;
         if (ch) {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
-          await ch.send(`**Files created:** ${fileList}`);
+          await ch.send(`**Files changed:** ${fileList}`);
         }
       }
     }

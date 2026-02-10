@@ -214,7 +214,7 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
         if (nonImageFiles.length > 0) {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
-          await channel.send(`**Files created:** ${fileList}`);
+          await channel.send(`**Files changed:** ${fileList}`);
         }
 
         // Schedule any callbacks the LLM requested
