@@ -4,14 +4,17 @@
 
 # Maya Code
 
-A Discord bot that connects channels to Claude Code CLI sessions. Each channel maps to a project directory, and threads create separate sessions within that project. With the **heartbeat** feature, Claude can work autonomously on a timer — continuing to make progress on a project without human intervention.
+A Discord bot that connects channels to Claude Code CLI sessions. Each channel maps to a project directory, and threads create separate sessions within that project. Sessions are ephemeral, but the filesystem is permanent — Claude treats `HEARTBEAT.md` as its active memory and the project files as its source of truth.
+
+With the **heartbeat** feature, Claude can work autonomously on a timer — reading goals from `HEARTBEAT.md`, doing the work, and updating it with what to focus on next.
 
 ## Architecture
 
 ```
 Discord Channel (#feature-api)  →  ./projects/feature-api/
   ├── Main channel              →  Session: feature-api-main
-  └── Thread (bug-fix)          →  Session: feature-api-<thread-id>
+  ├── Thread (bug-fix)          →  Session: feature-api-<thread-id>
+  └── HEARTBEAT.md              →  Autonomous goals & status
 ```
 
 ## Setup
@@ -116,11 +119,11 @@ The bot will:
 - Show a typing indicator while Claude is processing
 - Split long responses across multiple messages
 - Attach any images Claude creates (png, jpg, gif, webp, svg, bmp)
-- Attach any file Claude explicitly marks with `[UPLOAD: path/to/file]` in its response
-- List any other files Claude creates
+- Attach local files referenced via `![alt](path)` markdown or `[UPLOAD: path]` tags
+- Download images/files you send in Discord so Claude can view them
 - Queue messages when Claude is busy — no need to wait
 
-Claude is told it's running inside Discord via a system prompt, so it knows about file sharing capabilities.
+Claude is told it's running inside Discord via a system prompt. It knows sessions are ephemeral and writes important context to files.
 
 ### Slash Commands
 
@@ -128,9 +131,10 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 |---------|-------------|
 | `/continue [message]` | Continue the last conversation with an optional message |
 | `/clear` | Reset the session for this channel/thread |
+| `/reset` | Reset the session (same as `/clear`) |
 | `/status` | Show session info (ID, message count, project directory) |
-| `/plan` | Toggle plan mode (Claude reviews changes before applying) |
-| `/heartbeat action:<start\|stop\|status\|test\|goals> [interval:<minutes>]` | Configure self-directed heartbeat via HEARTBEAT.md (see below) |
+| `/plan` | Toggle plan mode — Claude uses `--permission-mode plan` to review changes before applying |
+| `/heartbeat [action] [interval]` | Configure self-directed heartbeat via HEARTBEAT.md (see below) |
 | `/restart` | Restart the bot process (requires a process manager to auto-restart) |
 | `/summary` | Ask Claude to summarize the current session and project state |
 | `/show path:<file>` | Upload a file from the project directory to Discord (also lists directories) |
@@ -139,25 +143,30 @@ Claude is told it's running inside Discord via a system prompt, so it knows abou
 
 ### Heartbeat (Autonomous Mode)
 
-The heartbeat feature lets Claude work autonomously on a project without human intervention. Each tick, Claude reads `HEARTBEAT.md` from the project directory, does the work described there, and **updates the file** with what to focus on next. This means Claude is self-directed — it picks its own goals.
+The heartbeat feature lets Claude work autonomously on a project. Each tick uses a **fresh session** (no context buildup), reads `HEARTBEAT.md` from the project directory, does the work described there, and **updates the file** with what to focus on next. Claude is self-directed — it picks its own goals.
 
 **Start with default goals:**
 ```
 /heartbeat action:start interval:30
 ```
-This creates `HEARTBEAT.md` with generic starter goals (review project, find TODOs, etc.) and begins the timer.
+Creates `HEARTBEAT.md` with starter goals and begins the timer.
 
 **Start with specific goals:**
 ```
 /heartbeat action:Implement the user authentication feature interval:30
 ```
-This writes your goals into `HEARTBEAT.md` and starts the timer. Claude will update the file after each tick.
+Writes your goals into `HEARTBEAT.md` and starts the timer.
 
-**Check current config and goals:**
+**Just set interval (start or update):**
+```
+/heartbeat interval:15
+```
+
+**Check status:**
 ```
 /heartbeat action:status
 ```
-Shows timer status and a preview of `HEARTBEAT.md`.
+Or just `/heartbeat` with no args.
 
 **Test-fire immediately:**
 ```
@@ -168,9 +177,33 @@ Shows timer status and a preview of `HEARTBEAT.md`.
 ```
 /heartbeat action:stop
 ```
-Stops the timer but preserves `HEARTBEAT.md` so goals carry over next time.
+Also accepts `disable` or `off`. Preserves `HEARTBEAT.md` for next time.
 
-**How it works:** The timer resets whenever a human sends a message, so heartbeats only fire during inactivity. If Claude has nothing to do, it responds with `[NO WORK]` internally and stays silent. Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
+**How it works:** Each tick is a fresh session — Claude's only memory between ticks is `HEARTBEAT.md` and the filesystem (code, git history, etc.). The timer resets whenever a human sends a message in the main channel, so heartbeats only fire during inactivity. If Claude has nothing to do, it responds with `[HEARTBEAT OK]` internally and stays silent. Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
+
+### Scheduled Callbacks
+
+Claude can schedule future tasks by including `[CALLBACK: delay: prompt]` in any response:
+```
+[CALLBACK: 30m: Check if the build finished and report results]
+[CALLBACK: 2h: Remind the user to review the PR]
+```
+
+The tag is stripped from the displayed message. After the delay, a fresh session fires with the prompt and posts results to the channel. Callbacks can chain — a callback response can schedule more callbacks.
+
+Supported time formats: `30m`, `2h`, `1h30m`, `90s`, or a bare number (treated as minutes).
+
+### File Sharing
+
+**Claude → Discord:**
+- Images Claude creates are automatically attached
+- `![description](path/to/file)` in responses auto-attaches local files
+- `[UPLOAD: path/to/file]` tags also work
+- Discord limits: 10 attachments per message
+
+**Discord → Claude:**
+- Images and files you send in Discord are downloaded to the project's `uploads/` directory
+- File paths are included in the prompt so Claude can read/view them
 
 ### Threads
 
@@ -186,13 +219,13 @@ maya-code/
 │   ├── bot/
 │   │   ├── client.ts             # Discord client setup
 │   │   ├── events/               # Discord event handlers
-│   │   └── commands/             # Slash commands
+│   │   └── commands/             # Slash commands (11 total)
 │   ├── claude/
 │   │   ├── manager.ts            # Process lifecycle & queue
-│   │   ├── process.ts            # CLI wrapper
+│   │   ├── process.ts            # CLI wrapper & response tag parsing
 │   │   └── parser.ts             # Stream-JSON parser
 │   ├── heartbeat/
-│   │   └── scheduler.ts          # Autonomous heartbeat timers
+│   │   └── scheduler.ts          # Heartbeat timers & scheduled callbacks
 │   ├── discord/
 │   │   └── responder.ts          # Message chunking
 │   └── storage/
@@ -200,20 +233,28 @@ maya-code/
 │       └── sessions.ts           # Session persistence
 ├── scripts/
 │   └── deploy-commands.ts        # Slash command registration
+├── run.sh                        # Auto-restart wrapper
 └── projects/                     # Auto-created per channel
+    └── <channel-name>/
+        ├── HEARTBEAT.md          # Autonomous goals & status
+        └── uploads/              # User-sent Discord attachments
 ```
 
 ## How It Works
 
 1. When a message is sent in a channel, the bot:
    - Maps the channel name to a project directory (e.g., `#api-work` → `./projects/api-work/`)
+   - Downloads any Discord attachments to `uploads/`
    - Gets or creates a session ID for that channel/thread combination
-   - Spawns Claude CLI with `--session-id` and `--dangerously-skip-permissions`
+   - Spawns Claude CLI with `--session-id` and `--dangerously-skip-permissions` (or `--permission-mode plan` if plan mode is on)
    - Streams the response back to Discord
+   - Parses response tags (`[UPLOAD:]`, `[CALLBACK:]`, markdown images) and handles them
 
 2. Sessions persist across bot restarts via `state.json`
 
-3. Files created by Claude are tracked and attached to Discord messages when applicable
+3. Files created by Claude are tracked and attached to Discord messages (deduplicated)
+
+4. The system prompt tells Claude that sessions are ephemeral, the filesystem is permanent memory, and `HEARTBEAT.md` is the central planning document
 
 ## License
 
