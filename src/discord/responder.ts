@@ -10,8 +10,7 @@ const { RateLimiter } = Limiter;
 type RateLimiterInstance = InstanceType<typeof RateLimiter>;
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
-
-const MAX_LENGTH = config.discord.maxMessageLength;
+import { splitMessage } from '../utils/discord.js';
 
 // Rate limiters per message for edits
 const editLimiters = new Map<string, RateLimiterInstance>();
@@ -33,65 +32,6 @@ function getEditLimiter(messageId: string): RateLimiterInstance {
     }, config.rateLimit.editsWindowMs * 2);
   }
   return editLimiters.get(messageId)!;
-}
-
-/**
- * Split text at safe boundaries (code blocks, newlines)
- */
-export function splitMessage(text: string): string[] {
-  if (text.length <= MAX_LENGTH) {
-    return [text];
-  }
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_LENGTH) {
-      chunks.push(remaining);
-      break;
-    }
-
-    let splitPoint = MAX_LENGTH;
-
-    // Try to split at code block boundary
-    const codeBlockEnd = remaining.lastIndexOf('\n```', MAX_LENGTH);
-    if (codeBlockEnd > MAX_LENGTH / 2) {
-      // Find the end of this code block line
-      const lineEnd = remaining.indexOf('\n', codeBlockEnd + 1);
-      if (lineEnd > 0 && lineEnd < MAX_LENGTH) {
-        splitPoint = lineEnd + 1;
-      }
-    } else {
-      // Try to split at newline
-      const newlinePos = remaining.lastIndexOf('\n', MAX_LENGTH);
-      if (newlinePos > MAX_LENGTH / 2) {
-        splitPoint = newlinePos + 1;
-      } else {
-        // Try to split at space
-        const spacePos = remaining.lastIndexOf(' ', MAX_LENGTH);
-        if (spacePos > MAX_LENGTH / 2) {
-          splitPoint = spacePos + 1;
-        }
-      }
-    }
-
-    chunks.push(remaining.slice(0, splitPoint));
-    remaining = remaining.slice(splitPoint);
-  }
-
-  return chunks;
-}
-
-/**
- * Fix unclosed code blocks in a chunk
- */
-function fixCodeBlocks(text: string): string {
-  const codeBlockMatches = text.match(/```/g) || [];
-  if (codeBlockMatches.length % 2 !== 0) {
-    return text + '\n```';
-  }
-  return text;
 }
 
 export class DiscordResponder {
@@ -150,7 +90,7 @@ export class DiscordResponder {
     try {
       // Update existing messages or create new ones
       for (let i = 0; i < chunks.length; i++) {
-        const chunk = fixCodeBlocks(chunks[i]);
+        const chunk = chunks[i];
 
         if (i < this.messages.length) {
           // Update existing message with rate limiting

@@ -13,6 +13,7 @@ export interface BackendProcessOptions {
   appendSystemPrompt?: string;
   model?: string;
   planMode?: boolean;
+  imageInputs?: string[];
 }
 
 export interface BackendProcessResult {

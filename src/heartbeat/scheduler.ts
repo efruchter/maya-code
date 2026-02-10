@@ -4,8 +4,8 @@ import { ScheduledCallback } from '../backends/types.js';
 import { getSession } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
+import { splitMessage } from '../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../utils/git.js';
-import { config } from '../config.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -277,38 +277,6 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
   // Schedule next tick
   scheduleTick(channelId, channelName, intervalMs, client);
-}
-
-/**
- * Split text for Discord's 2000 char limit
- */
-function splitMessage(text: string): string[] {
-  const MAX = config.discord.maxMessageLength;
-  if (text.length <= MAX) return [text];
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX) {
-      chunks.push(remaining);
-      break;
-    }
-
-    let splitPoint = MAX;
-    const newline = remaining.lastIndexOf('\n', MAX);
-    if (newline > MAX / 2) {
-      splitPoint = newline + 1;
-    } else {
-      const space = remaining.lastIndexOf(' ', MAX);
-      if (space > MAX / 2) splitPoint = space + 1;
-    }
-
-    chunks.push(remaining.slice(0, splitPoint));
-    remaining = remaining.slice(splitPoint);
-  }
-
-  return chunks;
 }
 
 /**

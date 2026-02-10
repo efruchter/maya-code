@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { setupReadyEvent } from './events/ready.js';
 import { setupInteractionEvent } from './events/interactionCreate.js';
 import { setupMessageEvent } from './events/messageCreate.js';
+import { setupThreadDeleteEvent } from './events/threadDelete.js';
 
 export function createClient(): Client {
   const client = new Client({
@@ -19,6 +20,7 @@ export function createClient(): Client {
   setupReadyEvent(client);
   setupInteractionEvent(client);
   setupMessageEvent(client);
+  setupThreadDeleteEvent(client);
 
   // Prevent unhandled Discord errors from crashing the process
   client.on('error', (error) => {
