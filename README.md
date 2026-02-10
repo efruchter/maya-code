@@ -9,7 +9,7 @@ A Discord bot that connects channels to Claude Code CLI sessions. Each channel m
 With the **heartbeat** feature, Claude can work autonomously on a timer — reading goals from `HEARTBEAT.md`, doing the work, and updating it with what to focus on next.
 
 ## How I Use It
-I treat maya code like a team of developers. I have them write down what they want to accomplish, and check in with me as they complete their work. It's claude code running on your PC, so you can hook it up to anything else in your pipeline. You can have the agents prepare documents and images for you, take screenshots of their progress and post it... Whatever setup you can imagine, it can probbaly work with the right prompting. Encourage them to make use of the filesystem (or just let the system prompt do it's thing).
+I treat maya code like a team of developers. I have them write down what they want to accomplish, and check in with me as they complete their work. It's claude code running on your PC, so you can hook it up to anything else in your pipeline. You can have the agents prepare documents and images for you, take screenshots of their progress and post it... Whatever setup you can imagine, it can probably work with the right instruction crafting. Encourage them to make use of the filesystem (or just let the system prompt do it's thing).
 
 Want to spin up a new project? Just go to your server and Create Channel. Nodle around with random ideas from your couch. 🐺
 
