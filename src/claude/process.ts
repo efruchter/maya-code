@@ -10,6 +10,7 @@ export interface ClaudeProcessOptions {
   continueSession?: boolean;
   appendSystemPrompt?: string;
   model?: string;
+  planMode?: boolean;
 }
 
 export interface ScheduledCallback {
@@ -121,7 +122,11 @@ export class ClaudeProcess extends EventEmitter {
       '--output-format', 'stream-json',
     ];
 
-    args.push('--dangerously-skip-permissions');
+    if (this.options.planMode) {
+      args.push('--permission-mode', 'plan');
+    } else {
+      args.push('--dangerously-skip-permissions');
+    }
 
     if (this.options.appendSystemPrompt) {
       args.push('--append-system-prompt', this.options.appendSystemPrompt);

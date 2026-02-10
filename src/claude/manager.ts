@@ -145,6 +145,7 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
     continueSession: shouldContinue,
     appendSystemPrompt: systemPrompt,
     model: session.model,
+    planMode: !isHeartbeat && session.planMode,
   });
 
   activeProcesses.set(processKey, process);

@@ -82,7 +82,7 @@ export class StreamAccumulator {
               // Track file writes
               if (block.name === 'Write' || block.name === 'Edit') {
                 const input = block.input as { file_path?: string };
-                if (input.file_path) {
+                if (input.file_path && !this.createdFiles.includes(input.file_path)) {
                   this.createdFiles.push(input.file_path);
                   logger.debug(`Tracked file output: ${input.file_path}`);
                 }
