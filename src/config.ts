@@ -18,6 +18,7 @@ export const config = {
     guildId: requireEnv('DISCORD_GUILD_ID'),
     maxMessageLength: 2000,
   },
+  defaultModel: process.env.MODEL || 'claude-opus-4-6',
   baseDirectory: path.resolve(process.env.BASE_DIRECTORY || './projects'),
   stateFile: path.resolve('./state.json'),
 

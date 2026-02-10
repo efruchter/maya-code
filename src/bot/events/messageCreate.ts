@@ -1,5 +1,5 @@
 import { Client, Events, Message, ThreadChannel, AttachmentBuilder, Attachment } from 'discord.js';
-import { runClaude } from '../../claude/manager.js';
+import { runClaude } from '../../backends/manager.js';
 import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';

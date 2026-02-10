@@ -4,7 +4,7 @@ import {
   ThreadChannel,
 } from 'discord.js';
 import { clearSession, getSession } from '../../storage/sessions.js';
-import { killProcess, isProcessRunning } from '../../claude/manager.js';
+import { killProcess, isProcessRunning } from '../../backends/manager.js';
 import { logger } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
