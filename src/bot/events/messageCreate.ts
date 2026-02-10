@@ -3,6 +3,7 @@ import { runClaude } from '../../claude/manager.js';
 import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
+import { autoCommit, getCompactDiff } from '../../utils/git.js';
 import { config } from '../../config.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -182,6 +183,10 @@ export function setupMessageEvent(client: Client): void {
           : `[The user sent ${localAttachmentPaths.length} file(s). Read them to see their contents:]\n${fileList}`;
       }
 
+      // Snapshot current state before Claude runs
+      const projectDir = await getProjectDirectory(channelName);
+      await autoCommit(projectDir, `Pre-message snapshot`);
+
       const result = await runClaude({
         channelId,
         channelName,
@@ -236,6 +241,18 @@ export function setupMessageEvent(client: Client): void {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
           await channel.send(`**Files created:** ${fileList}`);
         }
+      }
+
+      // Show diff of what changed and auto-commit
+      if (!result.isError) {
+        const diff = await getCompactDiff(projectDir);
+        if (diff) {
+          const diffChunks = splitMessage(diff);
+          for (const chunk of diffChunks) {
+            await channel.send(chunk);
+          }
+        }
+        await autoCommit(projectDir, `Auto-commit after Claude response`);
       }
 
       // Schedule any callbacks the LLM requested

@@ -2,7 +2,9 @@ import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
 import { runClaude } from '../claude/manager.js';
 import { ScheduledCallback } from '../claude/process.js';
 import { getSession } from '../storage/sessions.js';
+import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
+import { autoCommit, getCompactDiff } from '../utils/git.js';
 import { config } from '../config.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -148,6 +150,10 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
     logger.info('Heartbeat tick — running prompt', { channelId, channelName });
 
+    // Snapshot state before heartbeat
+    const projectDir = await getProjectDirectory(channelName);
+    await autoCommit(projectDir, 'Pre-heartbeat snapshot');
+
     await channel.sendTyping();
     const typingInterval = setInterval(() => {
       channel.sendTyping().catch(() => {});
@@ -215,6 +221,16 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         if (result.callbacks.length > 0) {
           scheduleCallbacks(channelId, channelName, result.callbacks, client);
         }
+
+        // Show diff and auto-commit
+        const diff = await getCompactDiff(projectDir);
+        if (diff) {
+          const diffChunks = splitMessage(diff);
+          for (const chunk of diffChunks) {
+            await channel.send(chunk);
+          }
+        }
+        await autoCommit(projectDir, 'Auto-commit after heartbeat tick');
 
         logger.info('Heartbeat completed', {
           channelId,
