@@ -3,7 +3,7 @@ import {
   SlashCommandBuilder,
   ThreadChannel,
 } from 'discord.js';
-import { runClaude } from '../../claude/manager.js';
+import { runClaude } from '../../backends/manager.js';
 import { getSession } from '../../storage/sessions.js';
 import { logger } from '../../utils/logger.js';
 

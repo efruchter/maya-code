@@ -24,6 +24,7 @@ export interface SessionData {
 
 interface StateData {
   sessions: Record<string, SessionData>;
+  globalModel?: string;
 }
 
 /**
@@ -133,24 +134,21 @@ export async function setPlanMode(
 }
 
 /**
- * Set model for a session
+ * Set the global model (bot-wide).
  */
-export async function setModel(
-  channelId: string,
-  threadId: string | null,
-  model: string | undefined
-): Promise<boolean> {
-  const key = getSessionKey(channelId, threadId);
+export async function setGlobalModel(model: string | undefined): Promise<void> {
   const state = await loadState();
+  state.globalModel = model;
+  await saveState(state);
+  logger.info(`Set global model to ${model}`);
+}
 
-  if (state.sessions[key]) {
-    state.sessions[key].model = model;
-    await saveState(state);
-    logger.info(`Set model to ${model} for session: ${key}`);
-    return true;
-  }
-
-  return false;
+/**
+ * Get the global model from persisted state (or undefined if not set).
+ */
+export async function getGlobalModel(): Promise<string | undefined> {
+  const state = await loadState();
+  return state.globalModel;
 }
 
 /**

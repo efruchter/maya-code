@@ -5,7 +5,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { getSession } from '../../storage/sessions.js';
-import { isProcessRunning, getActiveProcessCount } from '../../claude/manager.js';
+import { isProcessRunning, getActiveProcessCount } from '../../backends/manager.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 
 export const data = new SlashCommandBuilder()

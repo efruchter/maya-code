@@ -5,7 +5,7 @@ import {
   ThreadChannel,
   AttachmentBuilder,
 } from 'discord.js';
-import { runClaude, isProcessRunning } from '../../claude/manager.js';
+import { runClaude, isProcessRunning } from '../../backends/manager.js';
 import { getSession } from '../../storage/sessions.js';
 import { DiscordResponder } from '../../discord/responder.js';
 import { scheduleCallbacks } from '../../heartbeat/scheduler.js';

@@ -4,7 +4,7 @@ import {
   ThreadChannel,
 } from 'discord.js';
 import { getOrCreateSession, setPlanMode } from '../../storage/sessions.js';
-import { isProcessRunning } from '../../claude/manager.js';
+import { isProcessRunning } from '../../backends/manager.js';
 import { logger } from '../../utils/logger.js';
 
 export const data = new SlashCommandBuilder()

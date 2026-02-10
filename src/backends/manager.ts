@@ -1,8 +1,15 @@
-import { ClaudeProcess, ClaudeProcessResult } from './process.js';
-import { getOrCreateSession, incrementMessageCount, addCost, SessionData } from '../storage/sessions.js';
+import { ClaudeProcess } from './claude/process.js';
+import { CodexProcess } from './codex/process.js';
+import { BackendProcess, BackendProcessResult } from './types.js';
+import { getOrCreateSession, incrementMessageCount, addCost, getGlobalModel } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
+import { config } from '../config.js';
+import { detectBackend } from '../models.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+
+export type { BackendProcessResult } from './types.js';
+export type { ScheduledCallback } from './types.js';
 
 export interface RunOptions {
   channelId: string;
@@ -37,7 +44,7 @@ Available slash commands (the user runs these, not you — but you can suggest t
 - /heartbeat — Configure autonomous heartbeat timer (self-directed via HEARTBEAT.md)
 - /summary — Get a summary of the current session
 - /show path:<file> — Upload a file from the project to Discord
-- /model [name] — Switch Claude model (opus, sonnet, haiku)
+- /model [name] — Switch model (opus, sonnet, haiku, codex, 5.2, etc.)
 - /usage — Show API cost and usage stats
 - /restart — Restart the bot
 
@@ -78,85 +85,92 @@ You are your own project manager. Don't just finish a task and stop — think ab
 - If you hit an error or blocker, document it in HEARTBEAT.md so the next tick can try a different approach`;
 
 // Track active processes by session key
-const activeProcesses = new Map<string, ClaudeProcess>();
+const activeProcesses = new Map<string, BackendProcess>();
 
 // Queue: per-channel promise chain so messages run sequentially
 const processQueues = new Map<string, Promise<unknown>>();
 
-/**
- * Get session key for tracking
- */
 function getProcessKey(channelId: string, threadId: string | null): string {
   return `${channelId}-${threadId || 'main'}`;
 }
 
 /**
- * Run Claude CLI for a channel/thread.
- * If a process is already running, the call is queued and will run after
- * the current process completes.
+ * Get the current active model (from state.json override or .env default).
  */
-export function runClaude(options: RunOptions): Promise<ClaudeProcessResult> {
+async function getActiveModel(): Promise<string> {
+  const globalModel = await getGlobalModel();
+  return globalModel || config.defaultModel;
+}
+
+/**
+ * Run a backend CLI for a channel/thread.
+ * Automatically picks Claude or Codex based on the current model.
+ */
+export function runClaude(options: RunOptions): Promise<BackendProcessResult> {
   const processKey = getProcessKey(options.channelId, options.threadId);
 
   const pending = processQueues.get(processKey) || Promise.resolve();
-  const next = pending.then(() => runClaudeImmediate(options)).catch((err) => {
-    // Ensure queue continues even if this run fails
+  const next = pending.then(() => runBackendImmediate(options)).catch((err) => {
     throw err;
   });
 
-  // Always advance the queue, even on failure
   processQueues.set(processKey, next.catch(() => {}));
 
   return next;
 }
 
-async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessResult> {
+async function runBackendImmediate(options: RunOptions): Promise<BackendProcessResult> {
   const { channelId, channelName, threadId, prompt, continueSession, isHeartbeat, onTextUpdate } = options;
   const processKey = getProcessKey(channelId, threadId);
 
-  // Get or create session
   const session = await getOrCreateSession(channelId, threadId, channelName);
-
-  // Get project directory
   const workingDirectory = await getProjectDirectory(channelName);
 
-  // Heartbeats use a fresh throwaway session each tick
+  // Resolve which model + backend to use
+  const model = await getActiveModel();
+  const backend = detectBackend(model);
+
   const heartbeatSessionId = isHeartbeat ? uuidv4() : null;
   const sessionId = heartbeatSessionId || session.sessionId;
   const shouldContinue = isHeartbeat ? false : (continueSession || session.messageCount > 0);
 
-  logger.info('Starting Claude process', {
+  logger.info('Starting backend process', {
+    backend,
+    model,
     sessionId,
     channelName,
     workingDirectory,
     isHeartbeat: !!isHeartbeat,
   });
 
-  // Build system prompt
   let systemPrompt = DISCORD_SYSTEM_PROMPT;
   if (isHeartbeat) {
     systemPrompt += HEARTBEAT_ADDITION;
   }
 
-  const process = new ClaudeProcess({
+  const processOptions = {
     sessionId,
     workingDirectory,
     prompt,
     continueSession: shouldContinue,
     appendSystemPrompt: systemPrompt,
-    model: session.model,
+    model,
     planMode: !isHeartbeat && session.planMode,
-  });
+  };
 
-  activeProcesses.set(processKey, process);
+  // Create the right backend process
+  const proc: BackendProcess = backend === 'codex'
+    ? new CodexProcess(processOptions)
+    : new ClaudeProcess(processOptions);
 
-  // Set up text streaming callback
+  activeProcesses.set(processKey, proc);
+
   if (onTextUpdate) {
-    process.on('text', onTextUpdate);
+    proc.on('text', onTextUpdate);
   }
 
   try {
-    const result = await process.run();
+    const result = await proc.run();
     await incrementMessageCount(channelId, threadId);
     if (result.costUsd > 0) {
       await addCost(channelId, threadId, result.costUsd);
@@ -167,23 +181,17 @@ async function runClaudeImmediate(options: RunOptions): Promise<ClaudeProcessRes
   }
 }
 
-/**
- * Check if a process is running for a channel/thread
- */
 export function isProcessRunning(channelId: string, threadId: string | null): boolean {
   const processKey = getProcessKey(channelId, threadId);
   return activeProcesses.has(processKey);
 }
 
-/**
- * Kill an active process
- */
 export function killProcess(channelId: string, threadId: string | null): boolean {
   const processKey = getProcessKey(channelId, threadId);
-  const process = activeProcesses.get(processKey);
+  const proc = activeProcesses.get(processKey);
 
-  if (process) {
-    process.kill();
+  if (proc) {
+    proc.kill();
     activeProcesses.delete(processKey);
     return true;
   }
@@ -191,9 +199,6 @@ export function killProcess(channelId: string, threadId: string | null): boolean
   return false;
 }
 
-/**
- * Get count of active processes
- */
 export function getActiveProcessCount(): number {
   return activeProcesses.size;
 }

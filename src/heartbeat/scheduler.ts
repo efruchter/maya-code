@@ -1,6 +1,6 @@
 import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
-import { runClaude } from '../claude/manager.js';
-import { ScheduledCallback } from '../claude/process.js';
+import { runClaude } from '../backends/manager.js';
+import { ScheduledCallback } from '../backends/types.js';
 import { getSession } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';

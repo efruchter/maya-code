@@ -1,74 +1,78 @@
-import {
-  ChatInputCommandInteraction,
-  SlashCommandBuilder,
-  ThreadChannel,
-} from 'discord.js';
-import { getOrCreateSession, setModel } from '../../storage/sessions.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { getGlobalModel, setGlobalModel } from '../../storage/sessions.js';
+import { resolveModel, getAvailableModels, detectBackend, Backend } from '../../models.js';
+import { config } from '../../config.js';
 import { logger } from '../../utils/logger.js';
-
-const MODEL_ALIASES: Record<string, string> = {
-  opus: 'claude-opus-4-6',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-};
 
 export const data = new SlashCommandBuilder()
   .setName('model')
-  .setDescription('Set or view the model for this session')
+  .setDescription('Set or view the current model (bot-wide)')
   .addStringOption((option) =>
     option
       .setName('name')
-      .setDescription('Model name or alias (opus, sonnet, haiku) — leave empty to view current')
+      .setDescription('Model name or alias (opus, sonnet, codex, 5.2, etc.) — leave empty to view current')
       .setRequired(false)
   );
 
-function getChannelName(channel: unknown): string {
-  if (channel && typeof channel === 'object' && 'name' in channel && typeof (channel as Record<string, unknown>).name === 'string') {
-    return (channel as Record<string, string>).name;
-  }
-  return 'default';
+function backendLabel(backend: Backend): string {
+  return backend === 'codex' ? 'Codex' : 'Claude';
 }
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
 
-  const channel = interaction.channel;
-  if (!channel) {
-    await interaction.editReply({ content: 'Could not determine channel.' });
-    return;
-  }
-
-  const isThread = channel instanceof ThreadChannel;
-  const threadId = isThread ? channel.id : null;
-  const parentChannel = isThread ? channel.parent : channel;
-  const channelName = getChannelName(parentChannel);
-  const channelId = parentChannel?.id || channel.id;
-
   const name = interaction.options.getString('name');
-
-  const session = await getOrCreateSession(channelId, threadId, channelName);
 
   // View current model
   if (!name) {
-    const current = session.model || 'default (CLI default)';
-    const aliases = Object.entries(MODEL_ALIASES)
-      .map(([alias, full]) => `\`${alias}\` → ${full}`)
-      .join('\n');
-    await interaction.editReply(`**Current model:** ${current}\n\n**Available aliases:**\n${aliases}`);
+    const globalModel = await getGlobalModel();
+    const current = globalModel || config.defaultModel;
+    const backend = detectBackend(current);
+
+    const models = getAvailableModels();
+    const claudeModels = models.filter(m => m.backend === 'claude');
+    const codexModels = models.filter(m => m.backend === 'codex');
+
+    // Deduplicate by modelId for display
+    const seen = new Set<string>();
+    const dedup = (entries: typeof models) =>
+      entries.filter(m => {
+        if (seen.has(m.modelId)) return false;
+        seen.add(m.modelId);
+        return true;
+      });
+
+    const claudeList = dedup(claudeModels).map(m => {
+      const aliases = claudeModels.filter(a => a.modelId === m.modelId).map(a => `\`${a.alias}\``).join(', ');
+      return `  ${aliases} → ${m.modelId}`;
+    }).join('\n');
+
+    seen.clear();
+    const codexList = dedup(codexModels).map(m => {
+      const aliases = codexModels.filter(a => a.modelId === m.modelId).map(a => `\`${a.alias}\``).join(', ');
+      return `  ${aliases} → ${m.modelId}`;
+    }).join('\n');
+
+    await interaction.editReply(
+      `**Current model:** ${current} (${backendLabel(backend)})\n` +
+      (globalModel ? `**Default (.env):** ${config.defaultModel}\n` : '') +
+      `\n**Claude models:**\n${claudeList}\n\n**Codex models:**\n${codexList}`
+    );
     return;
   }
 
   // Reset to default
   if (name === 'default' || name === 'reset') {
-    await setModel(channelId, threadId, undefined);
-    await interaction.editReply('**Model reset to default.** Claude CLI will use its default model.');
-    logger.info('Model reset to default', { channelId, threadId });
+    await setGlobalModel(undefined);
+    const backend = detectBackend(config.defaultModel);
+    await interaction.editReply(`**Model reset to default:** ${config.defaultModel} (${backendLabel(backend)})`);
+    logger.info('Model reset to default');
     return;
   }
 
-  // Set model — resolve alias or use as-is
-  const resolved = MODEL_ALIASES[name.toLowerCase()] || name;
-  await setModel(channelId, threadId, resolved);
-  await interaction.editReply(`**Model set to:** ${resolved}`);
-  logger.info('Model changed', { channelId, threadId, model: resolved });
+  // Resolve and set
+  const { modelId, backend } = resolveModel(name);
+  await setGlobalModel(modelId);
+  await interaction.editReply(`**Model switched to:** ${modelId} (${backendLabel(backend)})`);
+  logger.info('Global model changed', { model: modelId, backend });
 }

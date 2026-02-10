@@ -1,120 +1,18 @@
 import { spawn, ChildProcess } from 'child_process';
-import { EventEmitter } from 'events';
 import { parseStreamLine, StreamAccumulator } from './parser.js';
-import { logger } from '../utils/logger.js';
+import { logger } from '../../utils/logger.js';
+import { BackendProcess, BackendProcessOptions, BackendProcessResult } from '../types.js';
+import { extractResponseTags } from '../response-tags.js';
 
-export interface ClaudeProcessOptions {
-  sessionId: string;
-  workingDirectory: string;
-  prompt: string;
-  continueSession?: boolean;
-  appendSystemPrompt?: string;
-  model?: string;
-  planMode?: boolean;
-}
-
-export interface ScheduledCallback {
-  delayMs: number;
-  prompt: string;
-}
-
-export interface ClaudeProcessResult {
-  text: string;
-  durationMs: number;
-  costUsd: number;
-  isError: boolean;
-  sessionId: string;
-  createdFiles: string[];
-  imageFiles: string[];
-  uploadFiles: string[];
-  callbacks: ScheduledCallback[];
-}
-
-/**
- * Parse a time duration string like "30m", "2h", "1h30m", "90s" into milliseconds.
- */
-export function parseDelay(delayStr: string): number | null {
-  const str = delayStr.trim().toLowerCase();
-  let totalMs = 0;
-  let matched = false;
-
-  // Match patterns like 2h, 30m, 90s
-  const regex = /(\d+)\s*(h|hr|hrs|hours?|m|min|mins|minutes?|s|sec|secs|seconds?)/g;
-  let match;
-  while ((match = regex.exec(str)) !== null) {
-    const value = parseInt(match[1]);
-    const unit = match[2][0]; // first char: h, m, or s
-    if (unit === 'h') totalMs += value * 60 * 60 * 1000;
-    else if (unit === 'm') totalMs += value * 60 * 1000;
-    else if (unit === 's') totalMs += value * 1000;
-    matched = true;
-  }
-
-  // Also support bare number (treat as minutes)
-  if (!matched && /^\d+$/.test(str)) {
-    totalMs = parseInt(str) * 60 * 1000;
-    matched = true;
-  }
-
-  return matched && totalMs > 0 ? totalMs : null;
-}
-
-/**
- * Extract special tags from response text:
- * - [UPLOAD: path] tags for file attachments
- * - ![alt](path) and ![[path]] markdown images for local file attachments
- * - [CALLBACK: delay: prompt] for scheduled one-shot callbacks
- * Returns cleaned text, file paths, and scheduled callbacks.
- */
-export function extractResponseTags(text: string): { cleanText: string; uploadFiles: string[]; callbacks: ScheduledCallback[] } {
-  const uploadFiles: string[] = [];
-  const callbacks: ScheduledCallback[] = [];
-
-  // Extract [CALLBACK: delay: prompt] tags
-  let cleanText = text.replace(/\[CALLBACK:\s*([^:]+?):\s*(.+?)\]/g, (_match, delayStr: string, prompt: string) => {
-    const delayMs = parseDelay(delayStr);
-    if (delayMs) {
-      callbacks.push({ delayMs, prompt: prompt.trim() });
-    }
-    return '';
-  });
-
-  // Extract [UPLOAD: path] tags
-  cleanText = cleanText.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
-    uploadFiles.push(filePath.trim());
-    return '';
-  });
-
-  // Extract markdown image references to local files: ![alt](path)
-  // Matches paths that start with / or ./ or ../ or don't start with http
-  cleanText = cleanText.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (_match, alt: string, filePath: string) => {
-    uploadFiles.push(filePath.trim());
-    return alt ? `*${alt}*` : '';
-  });
-
-  // Extract Obsidian-style image embeds: ![[path]]
-  cleanText = cleanText.replace(/!\[\[([^\]]+)\]\]/g, (_match, filePath: string) => {
-    uploadFiles.push(filePath.trim());
-    return '';
-  });
-
-  return { cleanText: cleanText.trim(), uploadFiles, callbacks };
-}
-
-export class ClaudeProcess extends EventEmitter {
+export class ClaudeProcess extends BackendProcess {
   private process: ChildProcess | null = null;
   private accumulator: StreamAccumulator;
-  private options: ClaudeProcessOptions;
 
-  constructor(options: ClaudeProcessOptions) {
-    super();
-    this.options = options;
+  constructor(options: BackendProcessOptions) {
+    super(options);
     this.accumulator = new StreamAccumulator();
   }
 
-  /**
-   * Build the CLI arguments
-   */
   private buildArgs(): string[] {
     const args = [
       '-p',
@@ -137,10 +35,8 @@ export class ClaudeProcess extends EventEmitter {
     }
 
     if (this.options.continueSession) {
-      // Resume existing session by ID
       args.push('--resume', this.options.sessionId);
     } else {
-      // Start new session with ID
       args.push('--session-id', this.options.sessionId);
     }
 
@@ -149,10 +45,7 @@ export class ClaudeProcess extends EventEmitter {
     return args;
   }
 
-  /**
-   * Start the Claude CLI process
-   */
-  async run(): Promise<ClaudeProcessResult> {
+  async run(): Promise<BackendProcessResult> {
     return new Promise((resolve, reject) => {
       const args = this.buildArgs();
       logger.debug('Spawning Claude CLI', {
@@ -184,7 +77,6 @@ export class ClaudeProcess extends EventEmitter {
             this.accumulator.processEvent(event);
             this.emit('event', event);
 
-            // Emit text updates for streaming
             if (event.type === 'assistant') {
               this.emit('text', this.accumulator.getText());
             }
@@ -203,7 +95,6 @@ export class ClaudeProcess extends EventEmitter {
 
       this.process.on('close', (code) => {
         logger.info(`Claude CLI exited with code ${code}, accumulated text length: ${this.accumulator.getText().length}`);
-        // Process any remaining buffer
         if (buffer) {
           const event = parseStreamLine(buffer);
           if (event) {
@@ -237,7 +128,6 @@ export class ClaudeProcess extends EventEmitter {
           return;
         }
 
-        // Extract special tags from response text
         const { cleanText, uploadFiles, callbacks } = extractResponseTags(this.accumulator.getText());
 
         resolve({
@@ -255,16 +145,10 @@ export class ClaudeProcess extends EventEmitter {
     });
   }
 
-  /**
-   * Get current accumulated text
-   */
   getCurrentText(): string {
     return this.accumulator.getText();
   }
 
-  /**
-   * Kill the process
-   */
   kill(): void {
     if (this.process) {
       this.process.kill('SIGTERM');
