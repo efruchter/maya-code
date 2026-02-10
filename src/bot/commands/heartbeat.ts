@@ -196,8 +196,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  // Handle stop
-  if (action === 'stop' || intervalMinutes === 0) {
+  // Handle stop/disable
+  if (action === 'stop' || action === 'disable' || action === 'off' || intervalMinutes === 0) {
     await getOrCreateSession(channelId, null, channelName);
     await setHeartbeat(channelId, null, undefined);
     stop(channelId);
