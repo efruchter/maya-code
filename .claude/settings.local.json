@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ps:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(# Try nvidia-smi for GPU power, and check if we have any power info available nvidia-smi --query-gpu=power.draw --format=csv,noheader || echo \"\"no nvidia-smi\"\"; lspci)",
+      "Bash(# Try reading RAPL with sudo, and get CPU info sudo cat /sys/class/powercap/intel-rapl:0/energy_uj || sudo cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj || echo \"\"no rapl access\"\"; cat /proc/cpuinfo)",
+      "Bash(lscpu:*)"
+    ]
+  }
+}
