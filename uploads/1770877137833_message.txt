@@ -1,0 +1,202 @@
+13
+
+
+
+
+
+
+Mike Luan _ E01.ai · February 2026
+
+We got early access to GLM5 to stress-test its long-task capabilities. 700+ tool calls, 800+ context handoffs, and a single agent running for over 24 hours later — here’s what we learned.
+
+Not about GLM5 specifically. About what happens when AI stops being a conversation and starts being a process.
+
+We asked GLM5 to build this:
+
+Press enter or click to view image in full size
+
+Emulator-Challenge, a long task stress test for GLM5.
+Enter Long-Tasks, from Coding to Engineering
+Models have gotten remarkably good at writing code. But most of what they do today still lives inside stream of coherent sessions — write a function, fix a bug, scaffold a project. The conversation (or a few of them) ends, the task is done.
+
+Engineering doesn’t end when the conversation does. It stretches across days — research, architecture, phased implementation, testing, course-correcting, documenting decisions so the next session can continue where this one stopped.
+
+Once the model understands and follows higher-level methodology (strictly), it can be programmed (with prompt) to progress towards some abstract goal with a set of meta-rules, recreating this ‘analyse, build, document’ loop we do everyday, pushing it beyond the horizon of its context limit.
+
+GLM5, and the wave of long-task-capable models arriving now, seem built for this. The point isn’t writing pretty code in one turn — it’s being just as reliable on tool call #700 as on tool call #1.
+
+We built a challenge to find out.
+
+The Emulator Challenge
+Press enter or click to view image in full size
+
+The Result (Easy mode) — GLM5 finished the Emulator with 3D GUI and a proper visualization after 24Hr, with few nudges and design suggestions.
+We designed the Emulator Challenge: build a Game Boy Advance emulator from scratch in JavaScript — single agent, no parallelism — and embed it in a 3D rendered scene. Then we put GLM5 to the test.
+
+A GBA emulator can’t be faked — and we soon found that to be true even when we gave hints. CPU instruction set, memory paging, graphics timing, audio subsystem, plus a 3D frontend. Architecture design, systems engineering, subsystem implementation, frontend dev — all of it. A task on the scale of a real engineering project, and exactly the kind that exposes whether a model holds up over time.
+
+Input: a system prompt and a hardware doc. Then we stepped back.
+
+The question wasn’t whether the model could finish. It was whether, 800 context switches and 700 tool calls in, it could still think like an engineer — or a team:
+
+Scope work autonomously, decide granularity
+Adjust strategy on obstacles instead of looping — Very hard.
+Switch naturally between architect, engineer, and designer — Self Prompting with Roles.
+Hand off accurately to the next “self” after every context wipe
+Two versions:
+
+With reference — we gave it the gbajs source code. GLM5 read the architecture, understood the design, then reimplemented on its own terms. Learned from it, didn’t copy it. That distinction is engineering judgment.
+
+Result: core emulator working. ROMs load and run. 3D scene rendered. Try it →
+
+We also ran the same task on prior-generation models. They tended to get stuck in loops — micro and macro. Or gradually forgot the original goal, failing to hand off or follow the overarching instructions. Or halted on erroneous tool calls.
+
+Zero reference — no code, no web search. Training knowledge and the hardware doc only.
+
+Result: ran 24+ hours straight. CPU instruction set core completed. Model still progressing (test → build).
+
+What Made It Work (For So Long?)
+TL;DR — loops in your prompt, as long as your model can follow them.
+
+The prompt defines a meta-loop: work → test → log → advance. The model executes that loop, writes progress to files, and when the context resets, the next session reads the files and re-enters the same loop. Hundreds of times.
+
+That’s it. It’s a simple loop that the model follows reliably — session after session after session. Details (and ideas) at the bottom of this post.
+
+Observation1 — New Models are Long-Task Ready.
+A file-write error causes a bad test, a bad test leads to a wrong architecture call, and a few days later the project can be off the rails.
+
+Here’s what we saw from GLM5 across 800 sessions:
+
+Tool calls didn’t degrade. Zero anomalies across 700+ calls.
+
+Instructions didn’t decay. The conventions, standards, and test procedures we defined in the prompt were still being followed strictly after 800 context switches.
+
+Context relay worked. Every time the context was wiped, GLM5 rebuilt its working state from notes and files with little to no loss.
+
+We expect consistency to become an important benchmark going forward.
+
+Press enter or click to view image in full size
+
+GLM5 Handing off to the next Context.
+What This Opens Up
+The consistency we saw in GLM5 — and that we’d expect from long-task-capable models broadly — starts to make some previously impractical things feel within reach.
+
+Goal-driven agents. Give it a goal, not a step. The agent plans, executes, tests, adjusts, keeps going for hours. It’s not waiting for your next message — it’s seeking paths.
+
+Parallel delegation. Run five agents on different modules. Ten on different approaches. You move between them, reviewing, nudging. One developer supervising five long-task agents isn’t just 5x productivity — it starts to feel like a different kind of work.
+
+Beyond code. Long-task logic could work anywhere that needs sustained progress across phases and domains. As the time horizon stretches, a “task” starts looking more like a job — not a one-shot instruction, but continuous pursuit of a goal.
+
+Join The Writer's Circle event
+We see two patterns emerging:
+
+Long-Recurring — cyclical workflows, each round iterating on the last. Reporting pipelines, monitoring, iterative design.
+Long-Exploring — no fixed endpoint. Explore, converge, pivot. The path is the output. Research, analysis, experimental design.
+For AI for Science — experiment design, hypothesis testing, literature synthesis — long-task agents could matter even more than they do in code.
+
+Observation2 — Managing Long Tasks is Still Tricky.
+GLM5 did a great job following initial instructions and keeping the meta-loop running. But during testing, we observed some interesting patterns in how humans and models interact during long-running tasks.
+
+Circle-Dancing Around the Local Max
+At one point, the model got “stuck” in a hidden loop — one that spanned multiple sessions. It wasn’t obvious from any single session’s output. It took a human stepping back to spot the pattern (another agent could potentially catch this too).
+
+With careful design, this can be made self-detectable: explicitly documenting progress over the past N sessions and comparing them at the start of every new one. But it raises a broader question about observability — how do we tell if the model is going in circles, or making real progress?
+
+The Model Needs Help, but Can’t Stop
+Sometimes a model being too diligent can be just as wasteful as dumping tokens to /dev/null. During the experiment, we saw GLM5 trying to brute-force problems it probably shouldn't have — like generating a specific 3D asset (the GBA console model) from scratch, when the cost of a human sourcing a quality asset was a fraction of the time and tokens spent.
+
+Setting up explicit pause-and-ask thresholds seems important. The model benefits from having permission — and instructions — to stop and say “I need help here” instead of spending resources on a path that a human could resolve quickly.
+
+Press enter or click to view image in full size
+Press enter or click to view image in full size
+GLM5 wants 3D model, and it kept trying creating one. Loop discovered by human, model provided and progress resumed.
+Press enter or click to view image in full size
+
+It’s a pretty [Human] thing to get stuck with out-of-scope blockers.
+What’s Next — Challenges and Open Questions
+Observability. When an agent runs for 24 hours, a chat log isn’t enough. We found ourselves wanting other means to visualize and monitor.
+
+Intervention. What lightweight mechanisms could help — anomaly alerts, loop detection, decision review points that don’t break the agent’s flow? What’s the right abstraction for nudging a running agent?
+
+Evaluation. Existing benchmarks (HumanEval, SWE-bench) measure single-turn or single-issue performance. Long tasks probably need their own metrics — context relay quality, autonomous progression rate, loop detection, instruction decay. Measuring consistency over hundreds of context switches, not just single-turn quality, feels like an important direction.
+
+Trust. After 12 hours, the agent has produced thousands of lines of code. Reviewing everything isn’t realistic. Incremental validation, rollback checkpoints, and agents that surface their own uncertainty would help a lot.
+
+Cost and infrastructure. Long runs consume real resources. Budget-aware execution, cost visibility, and robust pause/resume feel like natural next steps — especially when agent state lives across files, context, and in-flight tool calls. Multi-agent coordination adds another layer.
+
+Research. What are the theoretical limits of context relay? How can agents learn to self-evaluate their own progress?
+
+The models are getting there. The methodology is starting to take shape. The infrastructure is what comes next.
+
+Try It Yourself
+You don’t need new tooling to start. If you have access to GLM5 or any consistent model, and a tool-use environment like Claude Code, OpenCode, or Cline — go.
+
+Here’s how we approach (simple) long-task prompt design.
+
+Press enter or click to view image in full size
+
+Buckle up! Beware, your agent will run for a long long time if designed right.
+Prompt as a Program with Loops
+It’ll be executed hundreds of times by an agent that forgets everything between runs. It needs:
+
+1. Goal + phases. Don’t just state the end goal. Break it into phases with “done” criteria.
+
+Phase 1: CPU core — ARM7TDMI decoder/executor
+  Done: all ARM/Thumb instructions implemented, unit tests pass
+Phase 2: Memory — map, DMA, hardware registers
+  Done: read/write tests pass, DMA functional
+Phase 3: Graphics — PPU, modes 0-5
+  Done: test ROMs render correctly
+2. Conventions. How to work. Be specific — ambiguity here becomes inconsistency over 200 sessions.
+
+- Source in /src, one module per file
+- Tests in /tests, mirroring /src
+- Run tests after every significant change
+- JSDoc on all public functions
+3. Notes protocol. This might be the most important part. Context disappears. Notes are how the next session picks up.
+
+After each session, update /notes/progress.md:
+1. Completed this session
+2. Next steps (specific, actionable)
+3. Open questions
+4. Blockers
+4. Testing gates. Define when to test. Without this, errors compound silently.
+
+One thing we learned: agents tend to gravitate toward tools they’re most familiar with. With a browser skill installed, the model defaulted to using a browser to test JavaScript output. For a system-level build like this, we explicitly directed it to use Node instead. The agent spent a bit more time upfront writing test code to read pixel data via stdio — but the overall process was significantly more streamlined.
+
+- Unit test each instruction after implementation (with node)
+- Integration test after each phase (with node)
+- Never skip a failing test
+- If a fix takes >3 attempts, log and move on
+Press enter or click to view image in full size
+
+GLM5 uses node instead of browser to dump framebuffer.
+5. Loop breaking. This is what we found separates a 10-minute prompt from a 10-hour one. (Still refining, but the rough idea:)
+
+- Log every retry to /notes/blockers.md with a count
+- After 3 failed attempts (check the log), try a different approach
+- After 20 min on one issue, log and move on
+- If repeating done work, re-read /notes/progress.md
+6. Recovery. What to do on a fresh session.
+
+1. Read /notes/progress.md
+2. Read /notes/decisions.md
+3. Read /notes/blockers.md
+4. Check recently modified files
+5. Continue from next item
+Things to avoid (Mistakes & Learning)
+“Keep notes” is too vague. Specify the file, the format, and the trigger.
+
+No loop-breaking → hours wasted. Every time. And critically: log the attempt count to a file. If it only lives in context, it resets next session and the agent forgets how many times it’s tried.
+
+Assuming it remembers. It doesn’t. Anything not in a file doesn’t exist after a context switch.
+
+Over-specifying code. Tell it what and how to work. Don’t tell it how to code. Give architecture guidance, leave implementation freedom.
+
+No test gates. Errors compound silently across sessions. By the time you notice, rollback is expensive.
+
+The era of AI as a conversation has been transformative. The era of AI as an engineering process — running in background, picking up where it left off, steadily closing on a goal — feels like it’s just getting started.
+
+The models are here. The question is what we build around them.
+
+The Emulator Challenge was run on GLM5 via OpenCode / Claude Code.
