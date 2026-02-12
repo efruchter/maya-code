@@ -100,6 +100,9 @@ interface HeartbeatTimer {
 // Track active heartbeat timers by channel ID (project-level, no thread)
 const activeTimers = new Map<string, HeartbeatTimer>();
 
+// Channels where heartbeat paused itself after [HEARTBEAT OK] — resumed on next user message
+const pausedHeartbeats = new Map<string, { channelName: string; intervalMs: number }>();
+
 /**
  * Schedule the next heartbeat tick for a channel.
  * Uses setTimeout so each tick resets from the last activity.
@@ -197,7 +200,9 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
       }
 
       if (noWork) {
-        logger.info('Heartbeat completed — no work to do', { channelId });
+        logger.info('Heartbeat completed — no work to do, pausing until next user message', { channelId });
+        pausedHeartbeats.set(channelId, { channelName, intervalMs });
+        return; // Don't schedule next tick — resetHeartbeat will resume it
       } else if (result.text) {
         const chunks = splitMessage(result.text);
         const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
@@ -323,6 +328,15 @@ export function resetHeartbeat(channelId: string, client: Client): void {
   const existing = activeTimers.get(channelId);
   if (existing) {
     scheduleTick(channelId, existing.channelName, existing.intervalMs, client);
+    return;
+  }
+
+  // Resume a paused heartbeat (paused after [HEARTBEAT OK])
+  const paused = pausedHeartbeats.get(channelId);
+  if (paused) {
+    pausedHeartbeats.delete(channelId);
+    logger.info('Resuming paused heartbeat after user message', { channelId });
+    scheduleTick(channelId, paused.channelName, paused.intervalMs, client);
   }
 }
 
@@ -336,6 +350,7 @@ export function stop(channelId: string): void {
     activeTimers.delete(channelId);
     logger.info('Heartbeat stopped', { channelId });
   }
+  pausedHeartbeats.delete(channelId);
 }
 
 /**
@@ -346,6 +361,7 @@ export function stopAll(): void {
     clearTimeout(entry.timer);
   }
   activeTimers.clear();
+  pausedHeartbeats.clear();
   logger.info('All heartbeats stopped');
 }
 
@@ -353,7 +369,7 @@ export function stopAll(): void {
  * Check if a heartbeat is active for a channel
  */
 export function isActive(channelId: string): boolean {
-  return activeTimers.has(channelId);
+  return activeTimers.has(channelId) || pausedHeartbeats.has(channelId);
 }
 
 /**
