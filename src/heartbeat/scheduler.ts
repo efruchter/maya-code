@@ -1,5 +1,5 @@
 import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
-import { runClaude } from '../backends/manager.js';
+import { runClaude, isProcessRunning } from '../backends/manager.js';
 import { ScheduledCallback } from '../backends/types.js';
 import { getSession } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
@@ -133,6 +133,13 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
     if (!session?.heartbeat?.enabled) {
       logger.info('Heartbeat no longer enabled, stopping', { channelId });
       activeTimers.delete(channelId);
+      return;
+    }
+
+    // Skip if a response is already in progress for this channel
+    if (isProcessRunning(channelId, null)) {
+      logger.debug('Heartbeat skipped — response in progress', { channelId });
+      scheduleTick(channelId, channelName, intervalMs, client);
       return;
     }
 
