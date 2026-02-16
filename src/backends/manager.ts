@@ -115,6 +115,16 @@ async function runBackendImmediate(options: RunOptions): Promise<BackendProcessR
   });
 
   let systemPrompt = await getSystemPrompt();
+
+  // Load SOUL.md from the project directory if it exists — defines the LLM's identity
+  try {
+    const soulPath = pathModule.join(workingDirectory, 'SOUL.md');
+    const soul = await fsPromises.readFile(soulPath, 'utf-8');
+    systemPrompt = soul.trim() + '\n\n' + systemPrompt;
+  } catch {
+    // No SOUL.md — that's fine
+  }
+
   if (isHeartbeat) {
     systemPrompt += '\n\n' + await getHeartbeatAddition();
   }
