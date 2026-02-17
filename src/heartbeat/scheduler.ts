@@ -1,12 +1,11 @@
-import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
+import { Client, TextChannel } from 'discord.js';
 import { runClaude, isProcessRunning } from '../backends/manager.js';
 import { ScheduledCallback } from '../backends/types.js';
 import { getSession } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
-import { splitMessage, batchAttachments } from '../utils/discord.js';
+import { splitMessage, batchAttachments, createAttachments } from '../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../utils/git.js';
-import fs from 'fs/promises';
 import path from 'path';
 
 const RATE_LIMIT_PATTERNS = [
@@ -213,7 +212,7 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
       } else if (result.text) {
         const chunks = splitMessage(result.text);
         const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
-        const attachments = await createAttachments(allAttachmentPaths);
+        const { attachments, skipped } = await createAttachments(allAttachmentPaths);
         const batches = batchAttachments(attachments);
 
         for (let i = 0; i < chunks.length; i++) {
@@ -226,6 +225,10 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         // Send remaining attachment batches
         for (const batch of batches) {
           await channel.send({ files: batch });
+        }
+
+        if (skipped.length > 0) {
+          await channel.send(`**Skipped (too large for Discord):** ${skipped.join(', ')}`);
         }
 
         const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
@@ -294,22 +297,6 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
   // Schedule next tick
   scheduleTick(channelId, channelName, intervalMs, client);
-}
-
-/**
- * Create Discord attachments for image files that exist
- */
-async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
-  const attachments: AttachmentBuilder[] = [];
-  for (const filePath of filePaths) {
-    try {
-      await fs.access(filePath);
-      attachments.push(new AttachmentBuilder(filePath, { name: path.basename(filePath) }));
-    } catch {
-      logger.debug(`File not found for attachment: ${filePath}`);
-    }
-  }
-  return attachments;
 }
 
 /**
@@ -472,7 +459,7 @@ export function scheduleCallbacks(
           if (!noWork && result.text) {
             const chunks = splitMessage(result.text);
             const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
-            const attachments = await createAttachments(allAttachmentPaths);
+            const { attachments, skipped } = await createAttachments(allAttachmentPaths);
             const batches = batchAttachments(attachments);
 
             for (let i = 0; i < chunks.length; i++) {
@@ -484,6 +471,9 @@ export function scheduleCallbacks(
             }
             for (const batch of batches) {
               await channel.send({ files: batch });
+            }
+            if (skipped.length > 0) {
+              await channel.send(`**Skipped (too large for Discord):** ${skipped.join(', ')}`);
             }
 
             // Handle any callbacks from the callback response (nested scheduling)

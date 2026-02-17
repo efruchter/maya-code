@@ -3,14 +3,13 @@ import {
   SlashCommandBuilder,
   TextChannel,
   ThreadChannel,
-  AttachmentBuilder,
 } from 'discord.js';
 import { runClaude, isProcessRunning } from '../../backends/manager.js';
 import { getSession } from '../../storage/sessions.js';
 import { DiscordResponder } from '../../discord/responder.js';
 import { scheduleCallbacks } from '../../heartbeat/scheduler.js';
+import { createAttachments } from '../../utils/discord.js';
 import { logger } from '../../utils/logger.js';
-import fs from 'fs/promises';
 import path from 'path';
 
 export const data = new SlashCommandBuilder()
@@ -28,19 +27,6 @@ function getChannelName(channel: unknown): string {
     return channel.name;
   }
   return 'default';
-}
-
-async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
-  const attachments: AttachmentBuilder[] = [];
-  for (const filePath of filePaths) {
-    try {
-      await fs.access(filePath);
-      attachments.push(new AttachmentBuilder(filePath, { name: path.basename(filePath) }));
-    } catch {
-      // File not found, skip
-    }
-  }
-  return attachments;
 }
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -99,13 +85,16 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await responder.sendError(result.text);
     } else {
       const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
-      const attachments = await createAttachments(allAttachmentPaths);
+      const { attachments, skipped } = await createAttachments(allAttachmentPaths);
       await responder.finalize(result.text, attachments);
 
-      const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
-      if (nonImageFiles.length > 0) {
-        const ch = interaction.channel as TextChannel | ThreadChannel | null;
-        if (ch) {
+      const ch = interaction.channel as TextChannel | ThreadChannel | null;
+      if (ch) {
+        if (skipped.length > 0) {
+          await ch.send(`**Skipped (too large for Discord):** ${skipped.join(', ')}`);
+        }
+        const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
+        if (nonImageFiles.length > 0) {
           const fileList = nonImageFiles.map(f => `\`${path.basename(f)}\``).join(', ');
           await ch.send(`**Files changed:** ${fileList}`);
         }

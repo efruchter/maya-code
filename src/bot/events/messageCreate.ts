@@ -1,9 +1,9 @@
-import { Client, Events, Message, ThreadChannel, AttachmentBuilder, Attachment } from 'discord.js';
+import { Client, Events, Message, ThreadChannel, Attachment } from 'discord.js';
 import { runClaude } from '../../backends/manager.js';
 import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
-import { splitMessage, batchAttachments } from '../../utils/discord.js';
+import { splitMessage, batchAttachments, createAttachments } from '../../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../../utils/git.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -13,18 +13,6 @@ function getChannelName(channel: unknown): string {
     return channel.name;
   }
   return 'default';
-}
-
-/**
- * Check if a file exists and is accessible
- */
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -61,30 +49,6 @@ async function downloadAttachments(attachments: Attachment[], channelName: strin
   }
 
   return localPaths;
-}
-
-/**
- * Create Discord attachments for files that exist
- */
-async function createAttachments(filePaths: string[]): Promise<AttachmentBuilder[]> {
-  const attachments: AttachmentBuilder[] = [];
-
-  for (const filePath of filePaths) {
-    if (await fileExists(filePath)) {
-      try {
-        const fileName = path.basename(filePath);
-        const attachment = new AttachmentBuilder(filePath, { name: fileName });
-        attachments.push(attachment);
-        logger.debug(`Created attachment for: ${filePath}`);
-      } catch (error) {
-        logger.warn(`Failed to create attachment for ${filePath}:`, error);
-      }
-    } else {
-      logger.debug(`File not found for attachment: ${filePath}`);
-    }
-  }
-
-  return attachments;
 }
 
 export function setupMessageEvent(client: Client): void {
@@ -169,7 +133,7 @@ export function setupMessageEvent(client: Client): void {
 
         // Create attachments for image files and explicit [UPLOAD] files
         const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
-        const attachments = await createAttachments(allAttachmentPaths);
+        const { attachments, skipped } = await createAttachments(allAttachmentPaths);
 
         // Split attachments into batches of 10 (Discord limit)
         const batches = batchAttachments(attachments);
@@ -190,6 +154,11 @@ export function setupMessageEvent(client: Client): void {
         // Send remaining attachment batches
         for (const batch of batches) {
           await channel.send({ files: batch });
+        }
+
+        // Warn about skipped oversized files
+        if (skipped.length > 0) {
+          await channel.send(`**Skipped (too large for Discord):** ${skipped.join(', ')}`);
         }
 
         // If there are non-image files, mention them

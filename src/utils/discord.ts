@@ -1,8 +1,12 @@
 import { AttachmentBuilder } from 'discord.js';
 import { config } from '../config.js';
+import { logger } from './logger.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 const MAX_LENGTH = config.discord.maxMessageLength;
 const MAX_ATTACHMENTS = 10;
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB Discord limit
 
 /**
  * Split text at safe boundaries for Discord's 2000 char limit.
@@ -118,4 +122,33 @@ export function batchAttachments(attachments: AttachmentBuilder[]): AttachmentBu
     batches.push(attachments.slice(i, i + MAX_ATTACHMENTS));
   }
   return batches;
+}
+
+/**
+ * Create Discord attachments for files that exist and are under the size limit.
+ * Returns { attachments, skipped } where skipped contains filenames that were too large.
+ */
+export async function createAttachments(filePaths: string[]): Promise<{ attachments: AttachmentBuilder[]; skipped: string[] }> {
+  const attachments: AttachmentBuilder[] = [];
+  const skipped: string[] = [];
+
+  for (const filePath of filePaths) {
+    try {
+      const stat = await fs.stat(filePath);
+      const fileName = path.basename(filePath);
+
+      if (stat.size > MAX_FILE_SIZE) {
+        const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+        logger.warn(`Skipping oversized attachment: ${fileName} (${sizeMB}MB)`);
+        skipped.push(`${fileName} (${sizeMB}MB)`);
+        continue;
+      }
+
+      attachments.push(new AttachmentBuilder(filePath, { name: fileName }));
+    } catch {
+      logger.debug(`File not found for attachment: ${filePath}`);
+    }
+  }
+
+  return { attachments, skipped };
 }
