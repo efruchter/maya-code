@@ -3,7 +3,7 @@ import { runClaude } from '../../backends/manager.js';
 import { resetHeartbeat, setLastUsageLimit, scheduleCallbacks } from '../../heartbeat/scheduler.js';
 import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
-import { splitMessage } from '../../utils/discord.js';
+import { splitMessage, batchAttachments } from '../../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../../utils/git.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -171,25 +171,25 @@ export function setupMessageEvent(client: Client): void {
         const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
         const attachments = await createAttachments(allAttachmentPaths);
 
+        // Split attachments into batches of 10 (Discord limit)
+        const batches = batchAttachments(attachments);
+
         // Send text chunks
         for (let i = 0; i < chunks.length; i++) {
           const isLastChunk = i === chunks.length - 1;
+          // Attach first batch to the last text chunk
+          const files = isLastChunk && batches.length > 0 ? batches.shift() : undefined;
 
           if (i === 0) {
-            // First message: reply with text, and attachments if this is the only chunk
-            await message.reply({
-              content: chunks[i],
-              files: isLastChunk && attachments.length > 0 ? attachments : undefined,
-            });
-          } else if (isLastChunk && attachments.length > 0) {
-            // Last chunk with attachments
-            await channel.send({
-              content: chunks[i],
-              files: attachments,
-            });
+            await message.reply({ content: chunks[i], files });
           } else {
-            await channel.send(chunks[i]);
+            await channel.send({ content: chunks[i], files });
           }
+        }
+
+        // Send remaining attachment batches
+        for (const batch of batches) {
+          await channel.send({ files: batch });
         }
 
         // If there are non-image files, mention them

@@ -1,6 +1,8 @@
+import { AttachmentBuilder } from 'discord.js';
 import { config } from '../config.js';
 
 const MAX_LENGTH = config.discord.maxMessageLength;
+const MAX_ATTACHMENTS = 10;
 
 /**
  * Split text at safe boundaries for Discord's 2000 char limit.
@@ -105,4 +107,15 @@ function getUnclosedCodeBlockLang(text: string): string | null {
 
   // Odd count means unclosed block
   return count % 2 === 1 ? lastLang : null;
+}
+
+/**
+ * Split attachments into batches of 10 (Discord's per-message limit).
+ */
+export function batchAttachments(attachments: AttachmentBuilder[]): AttachmentBuilder[][] {
+  const batches: AttachmentBuilder[][] = [];
+  for (let i = 0; i < attachments.length; i += MAX_ATTACHMENTS) {
+    batches.push(attachments.slice(i, i + MAX_ATTACHMENTS));
+  }
+  return batches;
 }

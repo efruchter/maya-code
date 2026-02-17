@@ -4,7 +4,7 @@ import { ScheduledCallback } from '../backends/types.js';
 import { getSession } from '../storage/sessions.js';
 import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
-import { splitMessage } from '../utils/discord.js';
+import { splitMessage, batchAttachments } from '../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../utils/git.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -214,13 +214,18 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
         const chunks = splitMessage(result.text);
         const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
         const attachments = await createAttachments(allAttachmentPaths);
+        const batches = batchAttachments(attachments);
 
         for (let i = 0; i < chunks.length; i++) {
           const isLast = i === chunks.length - 1;
           await channel.send({
             content: chunks[i],
-            files: isLast && attachments.length > 0 ? attachments : undefined,
+            files: isLast && batches.length > 0 ? batches.shift() : undefined,
           });
+        }
+        // Send remaining attachment batches
+        for (const batch of batches) {
+          await channel.send({ files: batch });
         }
 
         const nonImageFiles = result.createdFiles.filter(f => !result.imageFiles.includes(f));
@@ -468,13 +473,17 @@ export function scheduleCallbacks(
             const chunks = splitMessage(result.text);
             const allAttachmentPaths = [...result.imageFiles, ...result.uploadFiles];
             const attachments = await createAttachments(allAttachmentPaths);
+            const batches = batchAttachments(attachments);
 
             for (let i = 0; i < chunks.length; i++) {
               const isLast = i === chunks.length - 1;
               await channel.send({
                 content: chunks[i],
-                files: isLast && attachments.length > 0 ? attachments : undefined,
+                files: isLast && batches.length > 0 ? batches.shift() : undefined,
               });
+            }
+            for (const batch of batches) {
+              await channel.send({ files: batch });
             }
 
             // Handle any callbacks from the callback response (nested scheduling)

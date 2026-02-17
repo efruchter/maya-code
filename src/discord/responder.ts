@@ -10,7 +10,7 @@ const { RateLimiter } = Limiter;
 type RateLimiterInstance = InstanceType<typeof RateLimiter>;
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
-import { splitMessage } from '../utils/discord.js';
+import { splitMessage, batchAttachments } from '../utils/discord.js';
 
 // Rate limiters per message for edits
 const editLimiters = new Map<string, RateLimiterInstance>();
@@ -131,12 +131,14 @@ export class DiscordResponder {
     this.currentText = text;
     await this.doUpdate();
 
-    // Send attachments as a follow-up if present
+    // Send attachments as follow-ups, batched to respect Discord's 10-per-message limit
     if (attachments && attachments.length > 0) {
       try {
         const channel = this.interaction.channel as TextChannel | ThreadChannel;
         if (channel) {
-          await channel.send({ files: attachments });
+          for (const batch of batchAttachments(attachments)) {
+            await channel.send({ files: batch });
+          }
         }
       } catch (error) {
         logger.error('Failed to send attachments', error);
