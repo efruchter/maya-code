@@ -4,9 +4,9 @@
 
 # Maya Code - AI Agent Controller
 
-A Discord bot that connects channels to Claude Code CLI sessions. Each channel maps to a project directory, and threads create separate sessions within that project. Sessions are ephemeral, but the filesystem is permanent — Claude treats `HEARTBEAT.md` as its active memory and the project files as its source of truth.
+A Discord bot that connects channels to AI coding agent CLI sessions (Claude Code or Codex). Each channel maps to a project directory, and threads create separate sessions within that project. Sessions are ephemeral, but the filesystem is permanent — the agent treats `HEARTBEAT.md` as its active memory and the project files as its source of truth.
 
-With the **heartbeat** feature, Claude can work autonomously on a timer — reading goals from `HEARTBEAT.md`, doing the work, and updating it with what to focus on next.
+With the **heartbeat** feature, the agent can work autonomously on a timer — reading goals from `HEARTBEAT.md`, doing the work, and updating it with what to focus on next. With **SOUL.md**, each project can define a unique identity and persona for the agent.
 
 ## How I Use It
 I treat maya code like a team of developers. I have them write down what they want to accomplish, and check in with me as they complete their work. It's claude code running on your PC, so you can hook it up to anything else in your pipeline. You can have the agents prepare documents and images for you, take screenshots of their progress and post it... Whatever setup you can imagine, it can probably work with the right instruction crafting. Encourage them to make use of the filesystem (or just let the system prompt do it's thing).
@@ -22,6 +22,7 @@ Why Maya? LLM's create the illusion of sentience and competence. It's very convi
 Discord Channel (#feature-api)  →  ./projects/feature-api/
   ├── Main channel              →  Session: feature-api-main
   ├── Thread (bug-fix)          →  Session: feature-api-<thread-id>
+  ├── SOUL.md                   →  Agent identity & persona
   └── HEARTBEAT.md              →  Autonomous goals & status
 ```
 
@@ -146,8 +147,10 @@ Claude is told it's running inside Discord via a system prompt. It knows session
 | `/restart` | Restart the bot process (requires a process manager to auto-restart) |
 | `/summary` | Ask Claude to summarize the current session and project state |
 | `/show path:<file>` | Upload a file from the project directory to Discord (also lists directories) |
-| `/model [name]` | Set or view the Claude model for this session (aliases: opus, sonnet, haiku) |
+| `/model [name]` | Set or view the current model (bot-wide, aliases: opus, sonnet, haiku, codex, 5.3, etc.) |
 | `/usage` | Show API cost and message count for this session and all sessions |
+| `/stop` | Cancel the current response in this channel/thread |
+| `/wipe` | Delete all messages in a channel/thread (messages < 14 days old) |
 
 ### Heartbeat (Autonomous Mode)
 
@@ -189,6 +192,22 @@ Also accepts `disable` or `off`. Preserves `HEARTBEAT.md` for next time.
 
 **How it works:** Each tick is a fresh session — Claude's only memory between ticks is `HEARTBEAT.md` and the filesystem (code, git history, etc.). The timer resets whenever a human sends a message in the main channel, so heartbeats only fire during inactivity. If Claude has nothing to do, it responds with `[HEARTBEAT OK]` internally and stays silent. Heartbeats are per-project (per-channel, not per-thread) and persist across bot restarts.
 
+### SOUL.md (Agent Identity)
+
+Drop a `SOUL.md` file in any project directory to give the agent a unique identity for that project. Its contents are prepended to the system prompt — the agent will embody whatever persona you describe.
+
+```
+projects/
+├── game-project/
+│   ├── SOUL.md          ← "You are Pixel, a retro game dev who speaks in 8-bit references..."
+│   └── HEARTBEAT.md
+└── api-project/
+    ├── SOUL.md          ← "You are a senior backend engineer. Be concise and precise..."
+    └── HEARTBEAT.md
+```
+
+No `SOUL.md` = default behavior. The file is read fresh on every request, so you can edit it live without restarting.
+
 ### Scheduled Callbacks
 
 Claude can schedule future tasks by including `[CALLBACK: delay: prompt]` in any response:
@@ -224,26 +243,41 @@ maya-code/
 ├── src/
 │   ├── index.ts                  # Entry point
 │   ├── config.ts                 # Configuration loader
+│   ├── models.ts                 # Model registry & alias resolution
 │   ├── bot/
 │   │   ├── client.ts             # Discord client setup
 │   │   ├── events/               # Discord event handlers
-│   │   └── commands/             # Slash commands (11 total)
-│   ├── claude/
-│   │   ├── manager.ts            # Process lifecycle & queue
-│   │   ├── process.ts            # CLI wrapper & response tag parsing
-│   │   └── parser.ts             # Stream-JSON parser
+│   │   └── commands/             # Slash commands (13 total)
+│   ├── backends/
+│   │   ├── manager.ts            # Process lifecycle, queue & prompt loading
+│   │   ├── types.ts              # Shared BackendProcess base class & interfaces
+│   │   ├── response-tags.ts      # [UPLOAD], [CALLBACK] tag parsing
+│   │   ├── claude/               # Claude Code CLI backend
+│   │   │   ├── process.ts        # Claude CLI wrapper
+│   │   │   └── parser.ts         # Stream-JSON parser
+│   │   └── codex/                # Codex CLI backend
+│   │       ├── process.ts        # Codex CLI wrapper
+│   │       └── parser.ts         # JSONL parser
 │   ├── heartbeat/
 │   │   └── scheduler.ts          # Heartbeat timers & scheduled callbacks
 │   ├── discord/
-│   │   └── responder.ts          # Message chunking
+│   │   └── responder.ts          # Streaming message updates
+│   ├── utils/
+│   │   ├── discord.ts            # Message splitting & code block handling
+│   │   ├── git.ts                # Auto-commit & diff utilities
+│   │   └── logger.ts             # Winston logger
 │   └── storage/
 │       ├── directories.ts        # Channel→directory mapping
-│       └── sessions.ts           # Session persistence
+│       └── sessions.ts           # Session & model persistence
+├── prompts/
+│   ├── system.md                 # Base system prompt (editable)
+│   └── heartbeat.md              # Heartbeat addition prompt (editable)
 ├── scripts/
 │   └── deploy-commands.ts        # Slash command registration
 ├── run.sh                        # Auto-restart wrapper
 └── projects/                     # Auto-created per channel
     └── <channel-name>/
+        ├── SOUL.md               # Agent identity/persona (optional)
         ├── HEARTBEAT.md          # Autonomous goals & status
         └── uploads/              # User-sent Discord attachments
 ```
