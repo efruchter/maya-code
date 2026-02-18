@@ -13,14 +13,10 @@ export const logger = winston.createLogger({
     fmt
   ),
   transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
-          return `${timestamp} [${level}] ${message}${metaStr}`;
-        })
-      ),
+    new winston.transports.File({
+      filename: 'maya-code.log',
+      maxsize: 5 * 1024 * 1024,
+      maxFiles: 2,
     }),
   ],
 });
