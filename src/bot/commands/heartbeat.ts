@@ -5,7 +5,7 @@ import {
 } from 'discord.js';
 import { getOrCreateSession, setHeartbeat } from '../../storage/sessions.js';
 import { getProjectDirectory } from '../../storage/directories.js';
-import { startHeartbeat, stop, isActive, fireNow, getTimeRemainingMs } from '../../heartbeat/scheduler.js';
+import { startHeartbeat, stop, isActive, fireNow, getTimeRemainingMs, getAllHeartbeats } from '../../heartbeat/scheduler.js';
 import { logger } from '../../utils/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -32,7 +32,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((option) =>
     option
       .setName('action')
-      .setDescription('start, stop, status, test, or initial goals for HEARTBEAT.md')
+      .setDescription('start, stop, status, test, list, or initial goals for HEARTBEAT.md')
       .setRequired(false)
   )
   .addIntegerOption((option) =>
@@ -181,6 +181,33 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } else {
       await interaction.editReply('**Heartbeat:** disabled');
     }
+    return;
+  }
+
+  // Handle list — show all active heartbeats across all channels
+  if (action === 'list' || action === 'all') {
+    const heartbeats = getAllHeartbeats();
+    if (heartbeats.length === 0) {
+      await interaction.editReply('**No active heartbeats.**');
+      return;
+    }
+
+    const lines = heartbeats.map(hb => {
+      const mins = Math.round(hb.intervalMs / 60000);
+      let status: string;
+      if (hb.paused) {
+        status = 'paused (waiting for user message)';
+      } else if (hb.remainingMs !== null) {
+        const remainMins = Math.floor(hb.remainingMs / 60000);
+        const remainSecs = Math.floor((hb.remainingMs % 60000) / 1000);
+        status = `next tick in ${remainMins}m ${remainSecs}s`;
+      } else {
+        status = 'unknown';
+      }
+      return `- **#${hb.channelName}** — every ${mins}m (${status})`;
+    });
+
+    await interaction.editReply(`**Active heartbeats (${heartbeats.length}):**\n${lines.join('\n')}`);
     return;
   }
 

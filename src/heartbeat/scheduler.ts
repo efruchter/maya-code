@@ -382,6 +382,36 @@ export function getTimeRemainingMs(channelId: string): number | null {
 }
 
 /**
+ * Get info about all active/paused heartbeats.
+ */
+export function getAllHeartbeats(): { channelId: string; channelName: string; intervalMs: number; paused: boolean; remainingMs: number | null }[] {
+  const result: { channelId: string; channelName: string; intervalMs: number; paused: boolean; remainingMs: number | null }[] = [];
+
+  for (const [channelId, timer] of activeTimers) {
+    const elapsed = Date.now() - timer.scheduledAt;
+    result.push({
+      channelId,
+      channelName: timer.channelName,
+      intervalMs: timer.intervalMs,
+      paused: false,
+      remainingMs: Math.max(0, timer.intervalMs - elapsed),
+    });
+  }
+
+  for (const [channelId, info] of pausedHeartbeats) {
+    result.push({
+      channelId,
+      channelName: info.channelName,
+      intervalMs: info.intervalMs,
+      paused: true,
+      remainingMs: null,
+    });
+  }
+
+  return result;
+}
+
+/**
  * Restore heartbeats from saved session state (call on bot startup)
  */
 export async function restoreHeartbeats(client: Client): Promise<void> {
