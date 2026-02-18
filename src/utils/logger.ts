@@ -22,10 +22,5 @@ export const logger = winston.createLogger({
         })
       ),
     }),
-    new winston.transports.File({
-      filename: 'maya-code.log',
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 2,
-    }),
   ],
 });
