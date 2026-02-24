@@ -17,6 +17,7 @@ import * as usage from './usage.js';
 import * as reset from './reset.js';
 import * as stop from './stop.js';
 import * as wipe from './wipe.js';
+import * as shutdown from './shutdown.js';
 
 export interface Command {
   data: Pick<SlashCommandBuilder, 'name' | 'toJSON'>;
@@ -25,7 +26,7 @@ export interface Command {
 
 export const commands = new Collection<string, Command>();
 
-const commandModules = [continueCmd, clear, status, plan, heartbeat, restart, summary, show, model, usage, reset, stop, wipe];
+const commandModules = [continueCmd, clear, status, plan, heartbeat, restart, summary, show, model, usage, reset, stop, wipe, shutdown];
 
 for (const module of commandModules) {
   commands.set(module.data.name, module as Command);

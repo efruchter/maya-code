@@ -181,6 +181,16 @@ export function killProcess(channelId: string, threadId: string | null): boolean
   return false;
 }
 
+export function killAllProcesses(): number {
+  let count = 0;
+  for (const [key, proc] of activeProcesses) {
+    proc.kill();
+    count++;
+  }
+  activeProcesses.clear();
+  return count;
+}
+
 export function getActiveProcessCount(): number {
   return activeProcesses.size;
 }
