@@ -30,13 +30,24 @@ export function parseDelay(delayStr: string): number | null {
 /**
  * Extract special tags from response text:
  * - [UPLOAD: path] tags for file attachments
- * - ![alt](path) and ![[path]] markdown images for local file attachments
+ * - ![alt](path) and ![alt](path "title") markdown images for local file attachments
+ * - ![[path]] wiki-style embeds
  * - [CALLBACK: delay: prompt] for scheduled one-shot callbacks
  * Returns cleaned text, file paths, and scheduled callbacks.
+ *
+ * If workingDirectory is provided, relative paths are resolved against it.
  */
-export function extractResponseTags(text: string): { cleanText: string; uploadFiles: string[]; callbacks: ScheduledCallback[] } {
+export function extractResponseTags(text: string, workingDirectory?: string): { cleanText: string; uploadFiles: string[]; callbacks: ScheduledCallback[] } {
   const uploadFiles: string[] = [];
   const callbacks: ScheduledCallback[] = [];
+
+  function addFile(filePath: string): void {
+    let resolved = filePath.trim();
+    if (workingDirectory && !resolved.startsWith('/')) {
+      resolved = workingDirectory + '/' + resolved;
+    }
+    uploadFiles.push(resolved);
+  }
 
   let cleanText = text.replace(/\[CALLBACK:\s*([^:]+?):\s*(.+?)\]/g, (_match, delayStr: string, prompt: string) => {
     const delayMs = parseDelay(delayStr);
@@ -46,18 +57,21 @@ export function extractResponseTags(text: string): { cleanText: string; uploadFi
     return '';
   });
 
+  // [UPLOAD: path/to/file]
   cleanText = cleanText.replace(/\[UPLOAD:\s*(.+?)\]/g, (_match, filePath: string) => {
-    uploadFiles.push(filePath.trim());
+    addFile(filePath);
     return '';
   });
 
-  cleanText = cleanText.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/g, (_match, alt: string, filePath: string) => {
-    uploadFiles.push(filePath.trim());
+  // ![alt](path) or ![alt](path "title") — skip http(s) URLs
+  cleanText = cleanText.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)"]+?)(?:\s+"[^"]*")?\)/g, (_match, alt: string, filePath: string) => {
+    addFile(filePath);
     return alt ? `*${alt}*` : '';
   });
 
+  // ![[path]] — wiki-style embed
   cleanText = cleanText.replace(/!\[\[([^\]]+)\]\]/g, (_match, filePath: string) => {
-    uploadFiles.push(filePath.trim());
+    addFile(filePath);
     return '';
   });
 

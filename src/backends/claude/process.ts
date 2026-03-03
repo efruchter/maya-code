@@ -128,7 +128,7 @@ export class ClaudeProcess extends BackendProcess {
           return;
         }
 
-        const { cleanText, uploadFiles, callbacks } = extractResponseTags(this.accumulator.getText());
+        const { cleanText, uploadFiles, callbacks } = extractResponseTags(this.accumulator.getText(), this.options.workingDirectory);
 
         resolve({
           text: cleanText,
