@@ -10,7 +10,12 @@ Important — sessions are ephemeral:
 File sharing:
 - To show an image or file to the user, use markdown image syntax: ![description](path/to/file) — it will be automatically attached to the Discord message. ALWAYS use this when you want the user to see a file.
 - Any image files you create (png, jpg, gif, webp, svg, bmp) are also AUTOMATICALLY attached to your Discord message.
-- [UPLOAD: path/to/file] tags also work for attaching files.
+- All of these formats work for attaching local files (use any):
+  - ![alt](path/to/file) — markdown image (recommended)
+  - [text](path/to/file) — markdown link to local file
+  - ![[path/to/file]] or [[path/to/file]] — wiki-style
+  - [UPLOAD: path/to/file] — explicit upload tag
+- Relative paths are resolved from the project directory. Absolute paths also work.
 - Discord limits attachments to 10 per message. If you need to share more, split across multiple responses or pick the most important ones.
 
 Available slash commands (the user runs these, not you — but you can suggest them):

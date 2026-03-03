@@ -28,13 +28,33 @@ export function parseDelay(delayStr: string): number | null {
 }
 
 /**
- * Extract special tags from response text:
- * - [UPLOAD: path] tags for file attachments
- * - ![alt](path) and ![alt](path "title") markdown images for local file attachments
- * - ![[path]] wiki-style embeds
- * - [CALLBACK: delay: prompt] for scheduled one-shot callbacks
- * Returns cleaned text, file paths, and scheduled callbacks.
+ * Check if a string looks like a local file path (not a URL).
+ */
+function isLocalPath(str: string): boolean {
+  const trimmed = str.trim();
+  // Skip URLs
+  if (/^https?:\/\//i.test(trimmed)) return false;
+  // Absolute or relative path
+  if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) return true;
+  // Has a file extension (word.ext pattern)
+  if (/\.\w{1,10}$/.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Extract special tags and file references from response text.
  *
+ * Supported patterns:
+ * - [UPLOAD: path]              — explicit upload tag
+ * - ![alt](path)                — markdown image
+ * - ![alt](path "title")        — markdown image with title
+ * - ![[path]]                   — wiki-style image embed
+ * - [text](path)                — markdown link to local file
+ * - [[path]]                    — wiki-style link
+ * - <img src="path" ...>        — HTML image tag
+ * - [CALLBACK: delay: prompt]   — scheduled callback
+ *
+ * URLs (http/https) are left as-is — only local file paths are extracted.
  * If workingDirectory is provided, relative paths are resolved against it.
  */
 export function extractResponseTags(text: string, workingDirectory?: string): { cleanText: string; uploadFiles: string[]; callbacks: ScheduledCallback[] } {
@@ -46,9 +66,13 @@ export function extractResponseTags(text: string, workingDirectory?: string): { 
     if (workingDirectory && !resolved.startsWith('/')) {
       resolved = workingDirectory + '/' + resolved;
     }
-    uploadFiles.push(resolved);
+    // Deduplicate
+    if (!uploadFiles.includes(resolved)) {
+      uploadFiles.push(resolved);
+    }
   }
 
+  // First pass: extract callbacks (before other patterns to avoid conflicts)
   let cleanText = text.replace(/\[CALLBACK:\s*([^:]+?):\s*(.+?)\]/g, (_match, delayStr: string, prompt: string) => {
     const delayMs = parseDelay(delayStr);
     if (delayMs) {
@@ -63,14 +87,39 @@ export function extractResponseTags(text: string, workingDirectory?: string): { 
     return '';
   });
 
-  // ![alt](path) or ![alt](path "title") — skip http(s) URLs
+  // ![alt](path) or ![alt](path "title") — markdown image, skip URLs
   cleanText = cleanText.replace(/!\[([^\]]*)\]\((?!https?:\/\/)([^)"]+?)(?:\s+"[^"]*")?\)/g, (_match, alt: string, filePath: string) => {
     addFile(filePath);
     return alt ? `*${alt}*` : '';
   });
 
-  // ![[path]] — wiki-style embed
+  // ![[path]] — wiki-style image embed
   cleanText = cleanText.replace(/!\[\[([^\]]+)\]\]/g, (_match, filePath: string) => {
+    addFile(filePath);
+    return '';
+  });
+
+  // [[path]] — wiki-style link (without !)
+  cleanText = cleanText.replace(/(?<!!)\[\[([^\]]+)\]\]/g, (_match, filePath: string) => {
+    if (isLocalPath(filePath)) {
+      addFile(filePath);
+      return '';
+    }
+    return _match;
+  });
+
+  // [text](path) — markdown link to local file, skip URLs
+  // Must come after ![alt](path) to avoid double-matching
+  cleanText = cleanText.replace(/(?<!!)\[([^\]]+)\]\((?!https?:\/\/)([^)"]+?)(?:\s+"[^"]*")?\)/g, (_match, linkText: string, filePath: string) => {
+    if (isLocalPath(filePath)) {
+      addFile(filePath);
+      return linkText;
+    }
+    return _match;
+  });
+
+  // <img src="path"> or <img src='path'> — HTML image tags
+  cleanText = cleanText.replace(/<img\s+[^>]*src=["'](?!https?:\/\/)([^"']+)["'][^>]*\/?>/gi, (_match, filePath: string) => {
     addFile(filePath);
     return '';
   });
