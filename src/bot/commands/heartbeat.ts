@@ -41,6 +41,16 @@ export const data = new SlashCommandBuilder()
       .setDescription('Interval in minutes (0 to disable, default 30)')
       .setMinValue(0)
       .setRequired(false)
+  )
+  .addStringOption((option) =>
+    option
+      .setName('mode')
+      .setDescription('Session mode: fresh (default) or existing (continues main conversation)')
+      .addChoices(
+        { name: 'fresh', value: 'fresh' },
+        { name: 'existing', value: 'existing' },
+      )
+      .setRequired(false)
   );
 
 function getChannelName(channel: unknown): string {
@@ -70,6 +80,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const action = interaction.options.getString('action');
   const intervalMinutes = interaction.options.getInteger('interval');
+  const mode = interaction.options.getString('mode');
+  const fresh = mode !== 'existing'; // default to fresh
 
   // If only interval is provided (no action), update interval on existing heartbeat or start one
   if (!action && intervalMinutes !== null) {
@@ -97,12 +109,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       enabled: true,
       intervalMs,
       prompt: session.heartbeat?.prompt || HEARTBEAT_PROMPT,
+      fresh: mode ? fresh : session.heartbeat?.fresh,
     });
 
     startHeartbeat(channelId, channelName, intervalMs, interaction.client);
 
+    const modeNote = mode ? ` Mode: **${mode}**.` : '';
     await interaction.editReply(
-      `**Heartbeat interval updated** — running every ${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''}.`
+      `**Heartbeat interval updated** — running every ${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''}.${modeNote}`
     );
     logger.info('Heartbeat interval updated via command', { channelId, intervalMs });
     return;
@@ -264,13 +278,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     enabled: true,
     intervalMs,
     prompt: HEARTBEAT_PROMPT,
+    fresh,
   });
 
   startHeartbeat(channelId, channelName, intervalMs, interaction.client);
 
   const seedNote = seeded ? ' Created `HEARTBEAT.md` with initial goals.' : ' Using existing `HEARTBEAT.md`.';
+  const modeNote = fresh ? '' : ' Mode: **existing** (continues main conversation).';
   await interaction.editReply(
-    `**Heartbeat enabled** — running every ${minutes} minute${minutes !== 1 ? 's' : ''}.${seedNote}\nClaude will read and update \`HEARTBEAT.md\` each tick.`
+    `**Heartbeat enabled** — running every ${minutes} minute${minutes !== 1 ? 's' : ''}.${seedNote}${modeNote}\nClaude will read and update \`HEARTBEAT.md\` each tick.`
   );
 
   logger.info('Heartbeat enabled via command', { channelId, channelName, intervalMs, seeded });

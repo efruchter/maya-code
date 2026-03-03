@@ -101,9 +101,11 @@ async function runBackendImmediate(options: RunOptions): Promise<BackendProcessR
   const model = await getActiveModel();
   const backend = detectBackend(model);
 
-  const heartbeatSessionId = isHeartbeat ? uuidv4() : null;
+  // Heartbeats default to fresh sessions unless configured otherwise
+  const heartbeatFresh = isHeartbeat && (session.heartbeat?.fresh !== false);
+  const heartbeatSessionId = heartbeatFresh ? uuidv4() : null;
   const sessionId = heartbeatSessionId || session.sessionId;
-  const shouldContinue = isHeartbeat ? false : (continueSession || session.messageCount > 0);
+  const shouldContinue = heartbeatFresh ? false : (continueSession || session.messageCount > 0);
 
   logger.info('Starting backend process', {
     backend,

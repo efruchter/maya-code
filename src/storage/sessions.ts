@@ -7,6 +7,7 @@ export interface HeartbeatConfig {
   enabled: boolean;
   intervalMs: number;
   prompt: string;
+  fresh?: boolean; // true = new session each tick (default), false = continue existing session
 }
 
 export interface SessionData {
