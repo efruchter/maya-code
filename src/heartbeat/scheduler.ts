@@ -207,6 +207,7 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
 
       if (noWork) {
         logger.info('Heartbeat completed — no work to do, pausing until next user message', { channelId });
+        activeTimers.delete(channelId);
         pausedHeartbeats.set(channelId, { channelName, intervalMs });
         return; // Don't schedule next tick — resetHeartbeat will resume it
       } else if (result.text) {
@@ -399,6 +400,8 @@ export function getAllHeartbeats(): { channelId: string; channelName: string; in
   }
 
   for (const [channelId, info] of pausedHeartbeats) {
+    // Skip if already listed from activeTimers (shouldn't happen, but just in case)
+    if (activeTimers.has(channelId)) continue;
     result.push({
       channelId,
       channelName: info.channelName,
