@@ -518,6 +518,8 @@ export function scheduleCallbacks(
             }
           }
 
+          logTranscript(channelName, { role: 'callback', text: result.text });
+
           logger.info('Callback completed', { channelId, durationMs: result.durationMs });
         } catch (error) {
           clearInterval(typingInterval);
