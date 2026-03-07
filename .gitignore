@@ -4,6 +4,10 @@ dist/
 projects/
 state.json
 *.log
+uploads/
+
+# Claude CLI local settings
+.claude/
 
 # Compiled files in scripts
 scripts/*.js
