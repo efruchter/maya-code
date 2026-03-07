@@ -6,6 +6,7 @@ import { getProjectDirectory } from '../storage/directories.js';
 import { logger } from '../utils/logger.js';
 import { splitMessage, batchAttachments, createAttachments } from '../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../utils/git.js';
+import { logTranscript } from '../utils/transcript.js';
 import path from 'path';
 
 const RATE_LIMIT_PATTERNS = [
@@ -252,6 +253,8 @@ async function tick(channelId: string, channelName: string, intervalMs: number, 
           }
         }
         await autoCommit(projectDir, 'Auto-commit after heartbeat tick');
+
+        logTranscript(channelName, { role: 'heartbeat', text: result.text });
 
         logger.info('Heartbeat completed', {
           channelId,

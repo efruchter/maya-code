@@ -5,6 +5,7 @@ import { getProjectDirectory } from '../../storage/directories.js';
 import { logger } from '../../utils/logger.js';
 import { splitMessage, batchAttachments, createAttachments } from '../../utils/discord.js';
 import { autoCommit, getCompactDiff } from '../../utils/git.js';
+import { logTranscript } from '../../utils/transcript.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -187,6 +188,10 @@ export function setupMessageEvent(client: Client): void {
       if (result.callbacks.length > 0) {
         scheduleCallbacks(channelId, channelName, result.callbacks, client);
       }
+
+      // Log transcript
+      logTranscript(channelName, { role: 'user', author: message.author.tag, text: message.content || '(attachment)' });
+      logTranscript(channelName, { role: 'assistant', text: result.text });
 
       logger.info('Claude response completed', {
         channelId,
